@@ -7,7 +7,12 @@ from utils.noise_schedules import cosine_noise_schedule
 
 class DDIM(nn.Module):
 
-	def __init__(self, backbone=None, pretrained_backbone=None, in_channels=3, noise_schedule=cosine_noise_schedule, default_imsize=32):
+	def __init__(self, backbone=None,
+				pretrained_backbone=None,
+				in_channels=3,
+				noise_schedule=cosine_noise_schedule,
+				default_imsize=32):
+
 		super().__init__()
 		self.in_channels = in_channels
 		self.default_imsize = default_imsize
@@ -20,7 +25,7 @@ class DDIM(nn.Module):
 	def forward(self, t, x, label=None):
 		return self.backbone(t,x,label=label)
 
-	def sample(self, batch_size=1, x=None, nsteps=1000, label=None, device=None, breakstep=-1, ddpm=False):
+	def sample(self, batch_size=1, x=None, nsteps=20, label=None, device=None, breakstep=-1, ddpm=False):
 		if device is None:
 			device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 		self.eval()
@@ -100,7 +105,7 @@ class MinimalResNet(nn.Module):
 						conditional=False,
 						num_classes=None,
 						kernel_size=3,
-						num_layers=8,
+						num_layers=6,
 						lastksize=1,
 						add_one=True):
 
@@ -154,7 +159,6 @@ class MinimalUNet(nn.Module):
 	def __init__(self, channels=3,
 						fsizes=[32, 64, 128, 256],
 						mode='circular',
-						attention=False,
 						conditional=False,
 						num_classes=None,
 						emb_dim=256,
@@ -170,7 +174,6 @@ class MinimalUNet(nn.Module):
 		self.conditional = conditional
 		self.emb_dim = emb_dim
 		self.kernel_size = kernel_size
-		self.attention = attention
 		self.lastksize = lastksize
 
 		self.embedding = EmbeddingModule(emb_dim, channels, conditional=conditional, num_classes=num_classes)

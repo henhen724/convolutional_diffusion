@@ -53,7 +53,7 @@ def main():
 	max_samples = args.max_samples if args.reduce_size else None
 	
 	if args.scoremoduletype == 'ELS':
-		mod = LocalEquivScoreModule(1, dataset,
+		mod = LocalEquivScoreModule(dataset,
 					batch_size=args.scorebatchsize,
 					image_size=image_size,
 					channels=in_channels,
@@ -62,14 +62,14 @@ def main():
 					shuffle=args.shuffle,
 					max_samples=max_samples)
 	elif args.scoremoduletype == 'bbELS': # ELS with Borders 
-		mod = LocalEquivBordersScoreModule(1, dataset,
+		mod = LocalEquivBordersScoreModule(dataset,
 					batch_size=args.scorebatchsize,
 					image_size=image_size,
 					channels=in_channels,
 					schedule=schedule,
 					max_samples=max_samples)
 	elif args.scoremoduletype == 'LS': # LS
-		mod = LocalScoreModule(1, dataset,
+		mod = LocalScoreModule(dataset,
 					image_size=image_size,
 					batch_size=len(dataset),
 					mode='zeros',

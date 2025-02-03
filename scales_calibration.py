@@ -77,20 +77,23 @@ def calibrate(
 	mods = []
 	for kernel_size in kernelsizes:
 		if scoremoduletype == 'ELS':
-			mod = LocalEquivScoreModule(kernel_size, dataset,
+			mod = LocalEquivScoreModule(dataset,
+						kernel_size=kernel_size,
 						batch_size=scorebatchsize,
 						image_size=image_size,
 						channels=in_channels,
 						mode='circular',
 						schedule=schedule)
 		elif scoremoduletype == 'bbELS':
-			mod = LocalEquivBordersScoreModule(kernel_size, dataset,
+			mod = LocalEquivBordersScoreModule(dataset,
+						kernel_size=kernel_size,
 						batch_size=scorebatchsize,
 						image_size=image_size,
 						channels=in_channels,
 						schedule=schedule)
 		elif scoremoduletype == 'LS':
 			mod = LocalScoreModule(1, dataset,
+						kernel_size=kernel_size
 						image_size=image_size,
 						batch_size=len(dataset),
 						mode='zeros',
