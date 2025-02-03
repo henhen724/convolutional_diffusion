@@ -59,7 +59,7 @@ class ScheduledScoreMachine(nn.Module):
 					imsize=32,
 					default_time_steps=20,
 					noise_schedule=cosine_noise_schedule,
-					score_backbone=False,
+					score_backbone=True,
 					scales=None,
 					**kwargs):
 
@@ -126,7 +126,8 @@ class ScheduledScoreMachine(nn.Module):
 
 class LocalEquivBordersScoreModule(nn.Module):
 
-	def __init__(self, kernel_size, dataset,
+	def __init__(self, dataset,
+				kernel_size=3,
 				batch_size=64,
 				image_size=32,
 				channels=3,
@@ -144,7 +145,8 @@ class LocalEquivBordersScoreModule(nn.Module):
 		self.image_size = image_size
 		self.schedule = schedule
 		self.max_samples = max_samples
-		self.local_module = LocalScoreModule(kernel_size, dataset,
+		self.local_module = LocalScoreModule(dataset,
+							kernel_size=kernel_size,
 							image_size=32,
 							batch_size=batch_size,
 							mode='zeros',
@@ -372,7 +374,8 @@ class LocalEquivBordersScoreModule(nn.Module):
 
 class LocalEquivScoreModule(nn.Module):
 
-	def __init__(self, kernel_size, dataset,
+	def __init__(self, dataset,
+				kernel_size=3,
 				batch_size=64,
 				image_size=32,
 				channels=3,
@@ -489,7 +492,8 @@ class LocalEquivScoreModule(nn.Module):
 
 class LocalScoreModule(nn.Module):
 
-	def __init__(self, kernel_size, dataset,
+	def __init__(self, dataset,
+				kernel_size=3,
 				image_size=32,
 				batch_size=10000,
 				mode='circular',
