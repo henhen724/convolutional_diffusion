@@ -379,9 +379,7 @@ class LocalEquivScoreModule(nn.Module):
 				batch_size=64,
 				image_size=32,
 				channels=3,
-				mode='circular', # DEFAULT MODE; ELS mode = 'circular'
 				schedule=cosine_noise_schedule,
-				padding=None,
 				max_samples=None,
 				shuffle=False,
 				**kwargs):
@@ -415,10 +413,7 @@ class LocalEquivScoreModule(nn.Module):
 
 		d = k//2
 
-		if self.mode == 'circular':
-			xpadded = F.pad(x, (d, d, d, d), mode='circular')
-		elif self.mode == 'zeros':
-			xpadded = F.pad(x, (d,d,d,d), mode='constant', value=0)
+		xpadded = F.pad(x, (d, d, d, d), mode='circular')
 
 		xpatches = F.unfold(xpadded, k, stride=1, padding=0) 
 		xnorms = torch.norm(xpatches, dim=1)**2
@@ -451,24 +446,14 @@ class LocalEquivScoreModule(nn.Module):
 			samps += images.shape[0]
 
 			bsize = images.shape[0]
-			if self.padding is None:
-				patches = F.unfold(images, k, stride=1, padding=0)
-			elif self.padding == 'zeros':
-				patches = F.unfold(images, k, stride=1, padding=k//2)
-			elif self.padding == 'circular':
-				images_padded = F.pad(images, (d, d, d, d), mode='circular')
-				patches = F.unfold(images_padded, k, stride=1, padding=0) # [64, k^2*c, h*w]
-
+			patches = F.unfold(images, k, stride=1, padding=0)
 
 			patches = torch.permute(patches, (2,0,1)) # [h*w, 64, k^2 *c]
 			patches = patches.reshape(patches.shape[0]*patches.shape[1], c, k, k) # [NP, c, k, k]			
 			pnorms = torch.sum(patches**2, dim=(1,2,3)) # [NP]
 			pcenters = patches[:,:,k//2,k//2] # [NP, c]
 			
-			if self.mode == 'circular':
-				pdotx = circular_convolution_native(x, patches)
-			elif self.mode == 'zeros':
-				pdotx = F.conv2d(xpadded, patches, padding='valid')
+			pdotx = circular_convolution_native(x, patches)
 
 			exp_args = -(xnorms[:,None,:,:] - 2*at*pdotx + (at**2)*pnorms[None,:,None,None])/(2*bt**2) # [b, NP, h,w]
 
@@ -496,7 +481,6 @@ class LocalScoreModule(nn.Module):
 				kernel_size=3,
 				image_size=32,
 				batch_size=10000,
-				mode='circular',
 				show_plots=False,
 				schedule=exponential_schedule,
 				max_samples=None,
@@ -508,7 +492,6 @@ class LocalScoreModule(nn.Module):
 		self.batch_size = batch_size
 		self.kernel_size = kernel_size
 		self.image_size = image_size
-		self.mode = mode
 		self.show_plots = show_plots
 		self.schedule = schedule
 		self.max_samples = max_samples
