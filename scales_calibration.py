@@ -82,7 +82,6 @@ def calibrate(
 						batch_size=scorebatchsize,
 						image_size=image_size,
 						channels=in_channels,
-						mode='circular',
 						schedule=schedule)
 		elif scoremoduletype == 'bbELS':
 			mod = LocalEquivBordersScoreModule(dataset,
@@ -96,7 +95,6 @@ def calibrate(
 						kernel_size=kernel_size
 						image_size=image_size,
 						batch_size=len(dataset),
-						mode='zeros',
 						schedule=schedule)
 		else:
 			raise ValueError(f"Unknown scoremoduletype: {scoremoduletype}")

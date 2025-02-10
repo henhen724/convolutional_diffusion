@@ -24,7 +24,7 @@ def main():
 	parser.add_argument('--resnet', action="store_true", default=False)
 	parser.add_argument('--homedir', type=str, default='./model_checkpoints')
 	parser.add_argument('--suppress', action="store_true", default=False)
-	parser.add_argument('--gamma', type=float, default=1)
+	parser.add_argument('--gamma', type=float, default=0.999965)
 	parser.add_argument('--maxsamps', type=int, default=100000)
 
 	args = parser.parse_args()

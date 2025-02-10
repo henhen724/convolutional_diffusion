@@ -57,7 +57,6 @@ def main():
 					batch_size=args.scorebatchsize,
 					image_size=image_size,
 					channels=in_channels,
-					mode='circular',
 					schedule=schedule,
 					shuffle=args.shuffle,
 					max_samples=max_samples)
@@ -72,7 +71,6 @@ def main():
 		mod = LocalScoreModule(dataset,
 					image_size=image_size,
 					batch_size=len(dataset),
-					mode='zeros',
 					show_plots=False,
 					schedule=schedule)
 	elif args.scoremoduletype == 'IS': # Ideal score
