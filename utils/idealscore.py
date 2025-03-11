@@ -391,7 +391,6 @@ class LocalEquivScoreModule(nn.Module):
 		self.batch_size = batch_size
 		self.kernel_size = kernel_size
 		self.image_size = image_size
-		self.mode = mode
 		self.schedule = schedule
 		self.padding = padding
 		self.max_samples = max_samples
