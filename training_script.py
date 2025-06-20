@@ -10,8 +10,8 @@ from utils.train import train_diffusion
 def main():
 
 	parser = argparse.ArgumentParser(description='DDIM training')
-	parser.add_argument('--epochs', type=int, default=100)
-	parser.add_argument('--batchsize', type=int, default=64)
+	parser.add_argument('--epochs', type=int, default=300)
+	parser.add_argument('--batchsize', type=int, default=128)
 	parser.add_argument('--dataset', type=str)
 	parser.add_argument('--lr', type=float, default=0.0001)
 	parser.add_argument('--conditional', action="store_true", default=False)
