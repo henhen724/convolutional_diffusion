@@ -23,7 +23,7 @@ def main():
 	parser.add_argument('--dataset', type=str, default='mnist')
 	parser.add_argument('--scoremoduletype', type=str, default='bbELS') # options: boundary broken ELS (bbELS), ELS, LS, and IS
 	parser.add_argument('--conditional', action="store_true", default=False)
-	parser.add_argument('--scalesfile', type=str, default='scales') # file with scales
+	parser.add_argument('--scalesfile', type=str, default='scales.pt') # file with scales
 	parser.add_argument('--scorebatchsize', type=int, default=256)
 	parser.add_argument('--fill', action="store_true", default=False)
 	parser.add_argument('--numiters', type=int, default=100)
@@ -31,8 +31,7 @@ def main():
 	parser.add_argument('--nlabels', type=int, default=10)
 	parser.add_argument('--force_overwrite', action="store_true", default=False)
 	parser.add_argument('--cpu', action="store_true", default=False)
-	parser.add_argument('--reduce_size', action="store_true", default=False)
-	parser.add_argument('--max_samples', type=int, default=1000)
+	parser.add_argument('--max_samples', type=int, default=100000)
 	parser.add_argument('--shuffle', action="store_true", default=False)
 
 	args = parser.parse_args()
@@ -81,7 +80,7 @@ def main():
 	else:
 		raise()
 
-	scales = list(torch.load(args.sfile + '.pt').int().numpy())
+	scales = list(torch.load(args.sfile).int().numpy())
 	scales = [int(s) for s in scales]
 
 	machine = ScheduledScoreMachine(mod, in_channels=in_channels, noise_schedule=schedule, score_backbone=True, scales=scales)

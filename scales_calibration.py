@@ -184,13 +184,13 @@ def main():
 	parser.add_argument('--scoremoduletype', type=str, default='bbELS') 
 	parser.add_argument('--conditional', action="store_true", default=False)
 	parser.add_argument('--kernelsizes', type=int, nargs='*')
-	parser.add_argument('--scorebatchsize', type=int, default=8)
+	parser.add_argument('--scorebatchsize', type=int, default=16)
 	parser.add_argument('--nsamps', type=int, default=20)
 	parser.add_argument('--nsteps', type=int, default=20)
 	parser.add_argument('--nlabels', type=int, default=10)
 	parser.add_argument('--eval_mode', type=str, default='cos')
 	parser.add_argument('--cpu', action="store_true", default=False)
-	parser.add_argument('--maxsamps', type=int, default=100000)
+	parser.add_argument('--maxsamps', type=int, default=5000)
 
 	args = parser.parse_args()
 

@@ -103,7 +103,7 @@ class ScheduledScoreMachine(nn.Module):
 
 			if visualize:
 				imputed = (x-eps*((beta_t)**0.5))/((1 - beta_t)**0.5)
-				denormalize_imshow(imputed,[0.5 for q in range(3)], [0.5 for q in range(3)])
+				denormalize_imshow(imputed,[0.5 for q in range(x.shape[1])], [0.5 for q in range(x.shape[1])])
 			
 			alpha_t = 1 - beta_t
 			beta_t_prev = self.noise_schedule(t - 1/nsteps)
@@ -392,7 +392,6 @@ class LocalEquivScoreModule(nn.Module):
 		self.kernel_size = kernel_size
 		self.image_size = image_size
 		self.schedule = schedule
-		self.padding = padding
 		self.max_samples = max_samples
 
 	def forward(self, t, x, label=None, device=None, k=None):
@@ -479,7 +478,7 @@ class LocalScoreModule(nn.Module):
 	def __init__(self, dataset,
 				kernel_size=3,
 				image_size=32,
-				batch_size=10000,
+				batch_size=256,
 				show_plots=False,
 				schedule=exponential_schedule,
 				max_samples=None,
@@ -557,48 +556,81 @@ class LocalScoreModule(nn.Module):
 
 		return -numerator/denominator/bt**2
 
+
 class IdealScoreModule(nn.Module):
 
-	def __init__(self, dataset, image_size=32, batch_size=50000, schedule=cosine_noise_schedule, **kwargs):
+	def __init__(self, dataset,
+					image_size=32,
+					batch_size=128,
+					schedule=cosine_noise_schedule,
+					max_samples=None,
+					shuffle=False,
+					**kwargs):
+
 		super().__init__()
 		self.dataset = dataset
-		self.trainloader = DataLoader(self.dataset, batch_size=batch_size, shuffle=True)
+		self.trainloader = DataLoader(self.dataset, batch_size=batch_size, shuffle=shuffle)
 		self.batch_size = batch_size
 		self.image_size = image_size
 		self.schedule = schedule
+		self.max_samples = max_samples
 
 	def forward(self, t, x, label=None, device=None, **kwargs):
 
 		if device is None:
 			device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-		print(device)
+		x = x.to(device)
 
-		# x has size [b, c, h, w]
 		b,c,h,w = x.shape
 		bt = (self.schedule(t))**0.5
 		at = (1-self.schedule(t))**0.5
 
-		images, labels = next(iter(self.trainloader)) # [NP, c, h, w]
-		images = images.to(device)
-		labels = labels.to(device)
-
-		if label is not None:
-			images = images[(labels==label).squeeze(),:,:,:]
-
-		images = images.to(device)
-		labels = labels.to(device)
 		at = at.to(device)
 		bt = bt.to(device)
 
+		numerator = torch.zeros(x.shape, device=device)
+		denominator = torch.zeros(b, device=device)
 
-		bsize = images.shape[0]
+		subtraction = None
 
-		pwise_diffs = x[:,None,:,:,:]-at*images[None,:,:,:,:] # [b,NP, c, h,w]
-		weight_args = -torch.sum(pwise_diffs**2, dim=(2,3,4))/(2*bt**2) # [b, NP]
-		weights = torch.softmax(weight_args,dim=1) # [b, NP]
-
-		qkv = torch.sum(pwise_diffs*weights[:,:,None,None,None], dim=1)
+		i = 0
 
 
-		return -qkv/bt**2
+		for images, labels in self.trainloader:
+
+			if label is not None:
+				images = images[(labels==label).squeeze(),:,:,:]
+
+			if images.shape[0] == 0:
+				continue
+
+			images = images.to(device)
+			labels = labels.to(device)
+
+			bsize = images.shape[0]
+
+			i += bsize
+			if self.max_samples is not None and i > self.max_samples:
+				break
+
+			pwise_diffs = x[:,None,:,:,:]-at*images[None,:,:,:,:]
+			exp_args = -torch.sum(pwise_diffs**2, dim=(2,3,4))/(2*bt**2) 
+			
+
+			if subtraction is None:
+				subtraction = torch.amax(exp_args, dim=(0,1), keepdim=False)
+			else:
+				new_subtraction = torch.amax(exp_args, dim=(0,1), keepdim=False)
+				delta_subtraction = (new_subtraction>subtraction)*new_subtraction+(subtraction>=new_subtraction)*subtraction
+				numerator /= torch.exp(delta_subtraction-subtraction)
+				denominator /= torch.exp(delta_subtraction-subtraction)
+				subtraction = delta_subtraction
+
+			exp_vals = torch.exp(exp_args - subtraction) 
+
+			numerator += torch.mean(exp_vals[:,:,None,None,None]*pwise_diffs, dim=1)
+			denominator += torch.mean(exp_vals, dim=1)
+
+
+		return -numerator/denominator/bt**2
