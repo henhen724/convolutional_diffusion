@@ -1,11 +1,11 @@
 import torch
 from torch import optim, nn
-from models import MinimalUNet, MinimalResNet, DDIM
-from utils.noise_schedules import cosine_noise_schedule
+from src.models import MinimalUNet, MinimalResNet, DDIM
+from src.utils.noise_schedules import cosine_noise_schedule
 import argparse
-from utils.data import get_dataset
+from src.utils.data import get_dataset
 from torch.utils.data import DataLoader
-from utils.train import train_diffusion
+from src.utils.train import train_diffusion
 
 def main():
 

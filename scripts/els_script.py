@@ -4,10 +4,10 @@ from torch.utils.data import DataLoader
 
 import argparse
 
-from utils.noise_schedules import cosine_noise_schedule
-from utils.data import get_dataset
-from utils.idealscore import ScheduledScoreMachine, LocalEquivBordersScoreModule, LocalEquivScoreModule, LocalScoreModule, IdealScoreModule
-from models import DDIM, MinimalUNet, MinimalResNet
+from src.utils.noise_schedules import cosine_noise_schedule
+from src.utils.data import get_dataset
+from src.utils.idealscore import ScheduledScoreMachine, LocalEquivBordersScoreModule, LocalEquivScoreModule, LocalScoreModule, IdealScoreModule
+from src.models import DDIM, MinimalUNet, MinimalResNet
 import shutil
 
 import sys

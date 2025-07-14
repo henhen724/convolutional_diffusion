@@ -6,16 +6,16 @@ import shutil
 import sys
 import os
 
-from utils.noise_schedules import cosine_noise_schedule
-from utils.data import get_dataset
-from models import DDIM, MinimalUNet, MinimalResNet
+from src.utils.noise_schedules import cosine_noise_schedule
+from src.utils.data import get_dataset
+from src.models import DDIM, MinimalUNet, MinimalResNet
 
-from utils.idealscore import (
-	ScheduledScoreMachine,
-	LocalEquivBordersScoreModule,
-	LocalEquivScoreModule,
-	LocalScoreModule,
-	IdealScoreModule
+from src.utils.idealscore import (
+    ScheduledScoreMachine,
+    LocalEquivBordersScoreModule,
+    LocalEquivScoreModule,
+    LocalScoreModule,
+    IdealScoreModule
 )
 
 '''
@@ -92,7 +92,7 @@ def calibrate(
 						schedule=schedule)
 		elif scoremoduletype == 'LS':
 			mod = LocalScoreModule(1, dataset,
-						kernel_size=kernel_size
+						kernel_size=kernel_size,
 						image_size=image_size,
 						batch_size=len(dataset),
 						schedule=schedule)

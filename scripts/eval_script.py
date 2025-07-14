@@ -5,13 +5,13 @@ import matplotlib.cm as cm
 
 import argparse
 from torch.utils.data import DataLoader
-from utils.data import get_dataset
+from src.utils.data import get_dataset
 import os
 import sys
 
-from utils.idealscore import denormalize
-from utils.data import get_dataset
-from utils.noise_schedules import cosine_noise_schedule
+from src.utils.idealscore import denormalize
+from src.utils.data import get_dataset
+from src.utils.noise_schedules import cosine_noise_schedule
 import argparse
 
 
