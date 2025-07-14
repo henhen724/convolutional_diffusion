@@ -1,0 +1,22 @@
+name: diffusion_env
+channels:
+  - defaults
+  - https://repo.anaconda.com/pkgs/main
+  - https://repo.anaconda.com/pkgs/r
+  - https://repo.anaconda.com/pkgs/msys2
+dependencies:
+  - ipykernel[version='>=6.0.0']
+  - jupyter[version='>=1.0.0']
+  - matplotlib[version='>=3.5.0']
+  - numpy[version='>=1.21.0']
+  - pillow[version='>=9.0.0']
+  - pip
+  - python=3.10
+  - pytorch[version='>=2.0.0']
+  - scikit-learn[version='>=1.0.0']
+  - scipy[version='>=1.7.0']
+  - torchaudio
+  - torchvision
+  - tqdm[version='>=4.62.0']
+  - gdown
+prefix: C:\Users\henhen724\anaconda3\envs\diffusion_env

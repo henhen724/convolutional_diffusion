@@ -3,7 +3,7 @@ import torch
 from torch import nn, optim
 import matplotlib.pyplot as plt
 from torch.nn import functional as F
-from utils.noise_schedules import cosine_noise_schedule
+from src.utils.noise_schedules import cosine_noise_schedule
 
 class DDIM(nn.Module):
 
@@ -18,8 +18,12 @@ class DDIM(nn.Module):
 		self.default_imsize = default_imsize
 		if pretrained_backbone is not None:
 			self.backbone = pretrained_backbone
+		elif backbone is not None:
+			self.backbone = backbone
 		else:
-			self.backbone = backbone(in_channels=in_channels, out_channels=in_channels, imsize=default_imsize)
+			# Create a default backbone if none provided
+			from .models import MinimalUNet
+			self.backbone = MinimalUNet(channels=in_channels)
 		self.noise_schedule = noise_schedule
 
 	def forward(self, t, x, label=None):
@@ -87,10 +91,13 @@ class EmbeddingModule(nn.Module):
 	def forward(self,t,label=None):
 
 		d = self.fdim//2
-		targ = t[:,None]/(10000**(torch.arange(d, device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'))/(d-1)))[None,:]
+		device = t.device
+		targ = t[:,None]/(10000**(torch.arange(d, device=device)/(d-1)))[None,:]
 		emb = torch.cat((torch.sin(targ), torch.cos(targ)),dim=1)
 
 		if self.conditional:
+			# Move label to the same device as the embedding
+			label = label.to(device)
 			emb += self.class_embeddings(label)
 
 		return emb
@@ -140,6 +147,11 @@ class MinimalResNet(nn.Module):
 			self.down_projection = nn.Sequential(nn.GroupNorm(8,emb_dim), nn.Conv2d(emb_dim, channels, lastksize, padding='same', padding_mode=mode))
 
 	def forward(self, t, x, label=None):
+		# Ensure all components are on the same device as input
+		device = x.device
+		t = t.to(device)
+		if label is not None:
+			label = label.to(device)
 
 		embedding_vec = self.embedding(t,label=label)
 		state = self.up_projection(x)
@@ -204,6 +216,11 @@ class MinimalUNet(nn.Module):
 				self.last_normalizer = nn.BatchNorm2d(fsizes[0])
 
 	def forward(self, t, x, label=None):
+		# Ensure all components are on the same device as input
+		device = x.device
+		t = t.to(device)
+		if label is not None:
+			label = label.to(device)
 
 		embedding_vec = self.embedding(t,label=label)
 
@@ -263,4 +280,7 @@ class UBlock(nn.Module):
 		self.model = nn.Sequential(*module_list)
 
 	def forward(self, x, embedding):
+		# Ensure embedding is on the same device as x
+		device = x.device
+		embedding = embedding.to(device)
 		return self.model(x+self.emb(embedding)[:,:,None,None])
