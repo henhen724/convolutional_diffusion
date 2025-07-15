@@ -1,17 +1,17 @@
-import torch
-import numpy as np
-from torch.nn import functional as F
-
-import torchvision
-import torchvision.transforms as transforms
-from torchvision import datasets, models, transforms
-from torch import nn, optim
-from torch.utils.data import DataLoader
-from torch.distributions import MultivariateNormal
 import math
 import random
-import matplotlib.pyplot as plt
+
 import matplotlib.cm as cm
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torchvision
+import torchvision.transforms as transforms
+from torch import nn, optim
+from torch.distributions import MultivariateNormal
+from torch.nn import functional as F
+from torch.utils.data import DataLoader
+from torchvision import datasets, models, transforms
 
 
 def denormalize(image, means, stds):
@@ -22,9 +22,9 @@ def denormalize(image, means, stds):
 def denormalize_imshow(image, means, stds):
 	image2 = denormalize(image, means, stds)
 	if len(image.shape) == 4:
-		plt.imshow(image2.detach().numpy()[0,:,:,:].transpose(1,2,0),cmap=cm.Greys_r)
+		plt.imshow(image2.detach().numpy()[0,:,:,:].transpose(1,2,0), cmap='gray_r')
 	else:
-		plt.imshow(image2.detach().numpy().transpose(1,2,0),cmap=cm.Greys_r)
+		plt.imshow(image2.detach().numpy().transpose(1,2,0), cmap='gray_r')
 	plt.axis('off')
 	plt.show()
 
@@ -276,7 +276,7 @@ class LocalEquivBordersScoreModule(nn.Module):
 				for j in range(lpatch):
 					xslice = xedge[:,:,j:k+j,:]
 					islice = iedge[:,:,j:k+j,:] # [NP, c, k, L]
-					filters = torch.cat([islice[:,:,:,a:a+k] for a in range(islice.shape[-1]-k+1)], axis=0) # [bNP, c, k, k]
+					filters = torch.cat([islice[:,:,:,a:a+k] for a in range(islice.shape[-1]-k+1)], dim=0) # [bNP, c, k, k]
 					fnorms = torch.sum(filters**2, dim=(1,2,3))
 
 

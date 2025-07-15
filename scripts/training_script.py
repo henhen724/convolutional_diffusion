@@ -1,11 +1,15 @@
-import torch
-from torch import optim, nn
-from src.models import MinimalUNet, MinimalResNet, DDIM
-from src.utils.noise_schedules import cosine_noise_schedule
 import argparse
-from src.utils.data import get_dataset
+import os
+
+import torch
+from torch import nn, optim
 from torch.utils.data import DataLoader
+
+from src.models import DDIM, MinimalResNet, MinimalUNet
+from src.utils.data import get_dataset
+from src.utils.noise_schedules import cosine_noise_schedule
 from src.utils.train import train_diffusion
+
 
 def main():
 
@@ -40,9 +44,9 @@ def main():
 	train_loader = DataLoader(dataset, batch_size=args.batchsize, shuffle=True)
 
 	if args.resnet:
-		fname = args.homedir + '/MinimalResNet_'
+		fname = os.path.join(args.homedir, 'MinimalResNet_')
 	else:
-		fname = args.homedir + '/MinimalUNet_'
+		fname = os.path.join(args.homedir, 'MinimalUNet_')
 
 	fname += metadata['name'] + f'_{args.mode}_lr_' + str(args.lr) + '_batchsize_' + str(args.batchsize) + '_wd_' + str(args.wd)
 

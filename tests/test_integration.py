@@ -1,16 +1,18 @@
-import torch
-import pytest
-import numpy as np
-import tempfile
 import os
+import tempfile
+
+import numpy as np
+import pytest
+import torch
 from torch.serialization import add_safe_globals
-from src.models import MinimalUNet, MinimalResNet, DDIM
-from src.utils.noise_schedules import cosine_noise_schedule
+
+from src.models import DDIM, MinimalResNet, MinimalUNet
 from src.utils.data import get_dataset
+from src.utils.noise_schedules import cosine_noise_schedule
 from src.utils.train import train_diffusion
 
 # Register model classes as safe globals for model saving/loading
-add_safe_globals([DDIM, MinimalUNet, MinimalResNet])
+add_safe_globals(safe_globals=[DDIM, MinimalUNet, MinimalResNet])
 
 
 class TestFullPipeline:
@@ -165,18 +167,24 @@ class TestModelSaving:
         # Save model
         with tempfile.NamedTemporaryFile(suffix='.pt', delete=False) as tmp_file:
             torch.save(model, tmp_file.name)
-            
+            tmp_file_path = tmp_file.name
+        
+        try:
             # Load model
-            loaded_model = torch.load(tmp_file.name)
+            loaded_model = torch.load(tmp_file_path)
             
             # Get output from loaded model
             loaded_output = loaded_model(t, x)
             
             # Check that outputs are the same
             assert torch.allclose(original_output, loaded_output, atol=1e-6)
-            
+        finally:
             # Clean up
-            os.unlink(tmp_file.name)
+            try:
+                os.unlink(tmp_file_path)
+            except (OSError, PermissionError):
+                # On Windows, file might still be in use, ignore cleanup errors
+                pass
 
 
 class TestDataConsistency:

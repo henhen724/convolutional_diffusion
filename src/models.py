@@ -1,9 +1,11 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch import nn, optim
-import matplotlib.pyplot as plt
 from torch.nn import functional as F
+
 from src.utils.noise_schedules import cosine_noise_schedule
+
 
 class DDIM(nn.Module):
 
@@ -85,10 +87,12 @@ class EmbeddingModule(nn.Module):
 		self.conditional = conditional
 		
 		if conditional:
+			if num_classes is None:
+				raise ValueError("num_classes must be specified when conditional is True")
 			self.class_embeddings = nn.Embedding(num_classes, fdim)
 		self.channels = channels
 
-	def forward(self,t,label=None):
+	def forward(self, t, label=None):
 
 		d = self.fdim//2
 		device = t.device
@@ -169,7 +173,7 @@ class MinimalUNet(nn.Module):
 
 
 	def __init__(self, channels=3,
-						fsizes=[32, 64, 128, 256],
+						fsizes=None,
 						mode='circular',
 						conditional=False,
 						num_classes=None,
@@ -181,6 +185,8 @@ class MinimalUNet(nn.Module):
 
 		super().__init__()
 
+		if fsizes is None:
+			fsizes = [32, 64, 128, 256]
 		self.fsizes = fsizes
 		self.channels = channels
 		self.conditional = conditional

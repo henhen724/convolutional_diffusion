@@ -1,9 +1,11 @@
+import os
+import tempfile
+
+import numpy as np
 import pytest
 import torch
-import numpy as np
-import tempfile
-import os
-from src.models import MinimalUNet, MinimalResNet, DDIM
+
+from src.models import DDIM, MinimalResNet, MinimalUNet
 from src.utils.noise_schedules import cosine_noise_schedule
 
 
