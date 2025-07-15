@@ -1,9 +1,10 @@
 import torch
-from torch.utils.data import Dataset
-import torchvision
-import torchvision.transforms as transforms
-import torchvision.datasets as datasets
 import torch.nn as nn
+import torchvision
+import torchvision.datasets as datasets
+import torchvision.transforms as transforms
+from torch.utils.data import Dataset
+
 
 def get_dataset(name, root='./data', dirname=None, train=True):
 
@@ -37,12 +38,43 @@ def get_dataset(name, root='./data', dirname=None, train=True):
 			transform=transform
 		)
 	elif name == 'celeba':
-		## CELEBA SHOULD BE DOWNLOADED FROM A PUBLIC MIRROR AND RESCALED TO SIZE 32 x 32.
+		if dirname is not None:
+			celeba_dir = dirname
+		else:
+			celeba_dir = prepare_celeba_32x32(root, train, transform)
+			dirname = celeba_dir
+
 		train_set = datasets.ImageFolder(
-            dirname,
-            transform=transform_train
-        )
+			root=celeba_dir,
+			transform=transform
+		)
 	return train_set, metadata
+
+def prepare_celeba_32x32(root, train, transform):
+			import os
+
+			from torchvision.datasets import CelebA
+			from torchvision.transforms import ToPILImage
+
+			save_dir = os.path.join(root, "celeba32")
+			if not os.path.exists(save_dir):
+				os.makedirs(save_dir)
+				class_dir = os.path.join(save_dir, "all")
+				os.makedirs(class_dir)
+				celeba_raw = datasets.CelebA(
+					root=root,
+					split='train' if train else 'test',
+					download=True,
+					transform=transforms.Compose([
+						transforms.Resize((32, 32)),
+						transforms.ToTensor()
+					])
+				)
+				for idx in range(len(celeba_raw)):
+					img, _ = celeba_raw[idx]
+					img_pil = ToPILImage()(img)
+					img_pil.save(os.path.join(class_dir, f"{idx:06d}.png"))
+			return save_dir
 
 def get_metadata(name):
 	

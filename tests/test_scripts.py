@@ -1,9 +1,10 @@
-import pytest
-import sys
 import os
-import tempfile
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
+
+import pytest
 
 
 class TestScriptImports:
@@ -82,12 +83,12 @@ class TestScalesCalibration:
     
     def test_scales_calibration_import(self):
         """Test that scales_calibration.py can be imported."""
-        from scales_calibration import calibrate
+        from scripts.scales_calibration import calibrate
         assert callable(calibrate)
     
     def test_scales_calibration_help(self):
         """Test that scales_calibration.py shows help without error."""
-        script_path = Path(__file__).parent.parent / "scales_calibration.py"
+        script_path = Path(__file__).parent.parent / "scripts" / "scales_calibration.py"
         result = subprocess.run(
             [sys.executable, str(script_path), "--help"],
             capture_output=True,
@@ -134,10 +135,10 @@ class TestScriptPaths:
         
         try:
             # Test importing main modules
-            from src.models import DDIM, MinimalUNet, MinimalResNet
+            from src.models import DDIM, MinimalResNet, MinimalUNet
             from src.utils.data import get_dataset
-            from src.utils.noise_schedules import cosine_noise_schedule
             from src.utils.idealscore import ScheduledScoreMachine
+            from src.utils.noise_schedules import cosine_noise_schedule
             from src.utils.train import train_diffusion
             
             assert all([DDIM, MinimalUNet, MinimalResNet, get_dataset, 

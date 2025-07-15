@@ -1,0 +1,84 @@
+# Code Coverage Guide
+
+This project includes code coverage checking to ensure comprehensive testing of the codebase.
+
+## Quick Start
+
+```bash
+# Run tests with coverage
+python run_coverage.py
+
+# Or use pytest directly
+python -m pytest --cov=src --cov-report=term-missing tests/
+```
+
+## Coverage Reports
+
+### Terminal Report
+
+Shows missing lines directly in the terminal:
+
+```bash
+python -m pytest --cov=src --cov-report=term-missing tests/
+```
+
+### HTML Report
+
+Generates a detailed HTML report in `htmlcov/`:
+
+```bash
+python -m pytest --cov=src --cov-report=html:htmlcov tests/
+```
+
+### XML Report
+
+Generates XML data for CI/CD integration:
+
+```bash
+python -m pytest --cov=src --cov-report=xml tests/
+```
+
+## Configuration
+
+### `.coveragerc`
+
+- **Source**: Only `src/` directory is measured
+- **Omit**: Excludes tests, cache, and environment directories
+- **Exclude Lines**: Ignores common patterns like `__repr__`, `if __name__ == '__main__'`, etc.
+
+### `pytest.ini`
+
+- Automatically includes coverage options
+- Generates terminal, HTML, and XML reports by default
+
+## Coverage Scripts
+
+### `run_coverage.py`
+
+Main coverage runner with options:
+
+```bash
+python run_coverage.py --no-html --no-xml  # Terminal only
+python run_coverage.py --no-term           # HTML and XML only
+```
+
+### `run_coverage.bat` (Windows)
+
+Windows batch script for easy execution.
+
+## Viewing Reports
+
+### HTML Report
+
+```bash
+# Open in browser
+start htmlcov/index.html  # Windows
+open htmlcov/index.html   # macOS
+xdg-open htmlcov/index.html  # Linux
+```
+
+### Coverage Data
+
+- **coverage.xml**: For CI/CD integration
+- **htmlcov/**: Detailed HTML report
+- **Terminal output**: Quick overview with missing lines

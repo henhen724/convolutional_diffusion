@@ -3,18 +3,19 @@
 Test script for the exterior derivative implementation.
 """
 
-import torch
 import numpy as np
-from exterior_derivative import (
+import torch
+
+from src.utils.exterior_derivative import (
     ExteriorDerivative,
+    cnn_like_function,
     compute_exterior_derivative,
     compute_exterior_derivative_nd,
-    linear_function,
-    rotation_function,
-    cnn_like_function,
+    exterior_derivative_magnitude,
     image_processing_function,
     is_exact,
-    exterior_derivative_magnitude
+    linear_function,
+    rotation_function,
 )
 
 

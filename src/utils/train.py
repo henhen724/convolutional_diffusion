@@ -1,8 +1,10 @@
+import time
+
 import torch
-from torch import optim, nn
-from tqdm import tqdm
+from torch import nn, optim
 from torch.nn.functional import mse_loss
-import time	
+from tqdm import tqdm
+
 
 def train_diffusion(model, train_loader, noise_schedule, device,
 					max_t=1000,
@@ -58,5 +60,5 @@ def train_diffusion(model, train_loader, noise_schedule, device,
 			scheduler.step()
 
 		if epoch % save_interval == save_interval-1:
-			torch.save(model, fname + f'_epoch' + str(epoch) + '.pt')
+			torch.save(model, fname + f'_epoch{epoch}.pt')
 

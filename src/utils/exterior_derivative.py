@@ -1,7 +1,8 @@
+from typing import Callable, Optional, Tuple, Union
+
+import numpy as np
 import torch
 import torch.nn as nn
-from typing import Callable, Optional, Tuple, Union
-import numpy as np
 from torch.autograd.functional import jacobian
 
 

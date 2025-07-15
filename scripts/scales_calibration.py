@@ -1,22 +1,22 @@
-import torch
-from torch import optim, nn
-from torch.utils.data import DataLoader
 import argparse
+import os
 import shutil
 import sys
-import os
 
-from src.utils.noise_schedules import cosine_noise_schedule
+import torch
+from torch import nn, optim
+from torch.utils.data import DataLoader
+
+from src.models import DDIM, MinimalResNet, MinimalUNet
 from src.utils.data import get_dataset
-from src.models import DDIM, MinimalUNet, MinimalResNet
-
 from src.utils.idealscore import (
-    ScheduledScoreMachine,
+    IdealScoreModule,
     LocalEquivBordersScoreModule,
     LocalEquivScoreModule,
     LocalScoreModule,
-    IdealScoreModule
+    ScheduledScoreMachine,
 )
+from src.utils.noise_schedules import cosine_noise_schedule
 
 '''
 THIS SCRIPT CALIBRATES THE EFFECTIVE LOCALITY SCALES OF THE NN MODELS FOR COMPARISON WITH ELS MACHINE
@@ -38,6 +38,11 @@ def calibrate(
 	cpu=False,
 	maxsamps=100000
 ):
+	# Validate required parameters
+	if modelfile is None:
+		raise ValueError("modelfile must be provided")
+	if kernelsizes is None:
+		raise ValueError("kernelsizes must be provided")
 	"""
 	Calibrate the effective locality scales of the NN models.
 
@@ -91,7 +96,7 @@ def calibrate(
 						channels=in_channels,
 						schedule=schedule)
 		elif scoremoduletype == 'LS':
-			mod = LocalScoreModule(1, dataset,
+			mod = LocalScoreModule(dataset,
 						kernel_size=kernel_size,
 						image_size=image_size,
 						batch_size=len(dataset),

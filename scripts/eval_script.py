@@ -1,18 +1,16 @@
-import torch
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-
 import argparse
-from torch.utils.data import DataLoader
-from src.utils.data import get_dataset
 import os
 import sys
 
-from src.utils.idealscore import denormalize
+import matplotlib.cm as cm
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+from torch.utils.data import DataLoader
+
 from src.utils.data import get_dataset
+from src.utils.idealscore import denormalize
 from src.utils.noise_schedules import cosine_noise_schedule
-import argparse
 
 
 def main():
@@ -39,31 +37,31 @@ def main():
 
 	_, metadata = get_dataset(args.dsname)
 
-	SEEDPATH = args.fname + 'seeds/' # seeds directory
-	OUTPATH = args.fname + args.outputname # ELS output directory
-	LPATH = args.fname + 'labels/' # labels (if conditional)
-	IPATH = args.fname + 'ideal/' # ideal score outputs for comparison
+	SEEDPATH = os.path.join(args.exp_fname, 'seeds') # seeds directory
+	OUTPATH = os.path.join(args.exp_fname, args.outputname) # ELS output directory
+	LPATH = os.path.join(args.exp_fname, 'labels') # labels (if conditional)
+	IPATH = os.path.join(args.exp_fname, 'ideal') # ideal score outputs for comparison
 
 
 	ideal_corrs = []
 	target_corrs = []
 
 	n = 0
-	while os.path.exists(SEEDPATH + '%04d.pt' % (n)):
-		seed = torch.load(SEEDPATH + '%04d.pt' %(n), map_location=device)
+	while os.path.exists(os.path.join(SEEDPATH, f'{n:04d}.pt')):
+		seed = torch.load(os.path.join(SEEDPATH, f'{n:04d}.pt'), map_location=device)
 		
 		if args.conditional:
-			label = torch.load(LPATH + '%04d.pt' %(n), map_location=device)
+			label = torch.load(os.path.join(LPATH, f'{n:04d}.pt'), map_location=device)
 		
 		output = model.sample(x=seed.clone(), nsteps=20, label=torch.tensor(label) if args.conditional else None)
 		norm_output = output - torch.mean(output)
 		norm_output = norm_output / torch.norm(norm_output)
 
-		theoretical = torch.load(OUTPATH + '%04d.pt' %(n), map_location=device)
+		theoretical = torch.load(os.path.join(OUTPATH, f'{n:04d}.pt'), map_location=device)
 		norm_theoretical = theoretical - torch.mean(theoretical)
 		norm_theoretical = norm_theoretical / torch.norm(norm_theoretical)
 
-		ideal = torch.load(IPATH + '%04d.pt' %(n), map_location=device)
+		ideal = torch.load(os.path.join(IPATH, f'{n:04d}.pt'), map_location=device)
 		norm_ideal = ideal - torch.mean(ideal)
 		norm_ideal = norm_ideal / torch.norm(norm_ideal)
 
@@ -84,10 +82,10 @@ def main():
 	ax.set_ylabel(r'$r^2$, ELS Machine')
 	ax.scatter(ideal_corrs, target_corrs)
 	ax.plot([0,1], [0,1], color='orange')
-	ax.set_title(config['title'])
-	config['figname'] = 'scatter_' + config['figname']
+	ax.set_title(args.title)
+	figname = 'scatter_' + args.figname
 
-	fig.savefig(config['figname'], bbox_inches='tight', pad_inches=0)
+	fig.savefig(figname, bbox_inches='tight', pad_inches=0)
 	plt.show()
 
 if __name__ == "__main__":
