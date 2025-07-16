@@ -7,7 +7,9 @@ from torch.utils.data import Dataset
 
 
 def get_dataset(name, root='./data', dirname=None, train=True):
-
+	# Normalize name to lowercase for consistent matching
+	name_lower = name.lower()
+	
 	metadata = get_metadata(name)
 
 	transform = transforms.Compose([
@@ -16,28 +18,28 @@ def get_dataset(name, root='./data', dirname=None, train=True):
 		transforms.Normalize(mean=metadata['mean'], std=metadata['std'])  # Normalize the images
 	])
 
-	if name == 'mnist':
+	if name_lower == 'mnist':
 		train_set = datasets.MNIST(
 			root=root,
 			train=train,
 			download=True,
 			transform=transform
 		)
-	elif name == 'cifar10':
+	elif name_lower == 'cifar10':
 		train_set = datasets.CIFAR10(
 			root=root,
 			train=train,
 			download=True,
 			transform=transform
 		)
-	elif name == 'fashion_mnist':
+	elif name_lower == 'fashionmnist' or name_lower == 'fashion_mnist':
 		train_set = datasets.FashionMNIST(
 			root=root,
 			train=train,
 			download=True,
 			transform=transform
 		)
-	elif name == 'celeba':
+	elif name_lower == 'celeba':
 		train_set = datasets.CelebA(
 			root=root,
 			split='train' if train else 'valid',
@@ -48,10 +50,15 @@ def get_dataset(name, root='./data', dirname=None, train=True):
 				transforms.Normalize(mean=metadata['mean'], std=metadata['std'])
 			])
 		)
+	else:
+		raise ValueError(f"Unknown dataset: {name}")
+		
 	return train_set, metadata
 
 
 def get_metadata(name):
+	# Normalize name to lowercase for consistent matching
+	name = name.lower()
 	
 	if name == "mnist":
 		metadata = {
@@ -77,7 +84,7 @@ def get_metadata(name):
 				"std": [0.5, 0.5, 0.5]
 			}
 		
-	elif name == "fashion_mnist":
+	elif name == "fashionmnist" or name == "fashion_mnist":
 		metadata = {
 				"name": 'fashion_mnist',
 				"image_size": 32,
@@ -94,6 +101,18 @@ def get_metadata(name):
 				"image_size": 32,
 				"num_classes": 1,
 				"train_images": 200000,
+				"val_images": 0,
+				"num_channels": 3,
+				"mean": [0.5, 0.5, 0.5],
+				"std": [0.5, 0.5, 0.5]
+		}
+	else:
+		# Default metadata for unknown datasets
+		metadata = {
+				"name": name,
+				"image_size": 32,
+				"num_classes": 1,
+				"train_images": 0,
 				"val_images": 0,
 				"num_channels": 3,
 				"mean": [0.5, 0.5, 0.5],

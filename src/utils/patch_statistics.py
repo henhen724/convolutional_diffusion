@@ -306,8 +306,9 @@ def analyze_patch_distances(dataset, patch_sizes: List[int] = [3, 6, 10],
                     if mask.sum() > 0:
                         radial_profile.append(power_spectrum[mask].mean().item())
                 
-                results[f'{patch_size}x{patch_size}'] = {
+                results[patch_size] = {
                     'num_patches': len(patches),
+                    'distances': distances_flat.tolist(),  # Store raw distances for plotting
                     'distance_stats': {
                         'mean': float(distances_flat.mean()),
                         'std': float(distances_flat.std()),
@@ -359,7 +360,7 @@ def plot_and_save_results(results: Dict, dataset_name: str, save_dir: Union[str,
         fig, axes = plt.subplots(2, 3, figsize=(18, 12))
         fig.suptitle(f'{dataset_name} Dataset Analysis', fontsize=16)
         
-        patch_sizes = sorted([key for key in results.keys() if 'x' in key and 'error' not in results[key]])
+        patch_sizes = sorted([key for key in results.keys() if isinstance(key, int) and 'error' not in results[key]])
         
         if len(patch_sizes) == 0:
             print(f"No valid patch size results found for {dataset_name}")
@@ -552,6 +553,105 @@ def plot_and_save_results(results: Dict, dataset_name: str, save_dir: Union[str,
         traceback.print_exc()
 
 
+def plot_distribution_comparison(results: Dict, dataset_name: str, save_path: Path):
+    """Create plots showing histogram with Gumbel vs Weibull distribution fits.
+    
+    Args:
+        results: Analysis results containing distance data and fits
+        dataset_name: Name of the dataset
+        save_path: Path to save the plots
+    """
+    try:
+        patch_sizes = [key for key in results.keys() if isinstance(key, int)]
+        n_patches = len(patch_sizes)
+        
+        if n_patches == 0:
+            print(f"No patch size results found for {dataset_name}")
+            return
+            
+        # Create figure with subplots for each patch size
+        fig, axes = plt.subplots(1, n_patches, figsize=(5*n_patches, 5))
+        if n_patches == 1:
+            axes = [axes]
+            
+        fig.suptitle(f'{dataset_name} - Distribution Fits Comparison', fontsize=16, y=1.02)
+        
+        for idx, patch_size in enumerate(sorted(patch_sizes)):
+            ax = axes[idx]
+            patch_results = results[patch_size]
+            
+            if 'error' in patch_results:
+                ax.text(0.5, 0.5, f'Error: {patch_results["error"]}', 
+                       transform=ax.transAxes, ha='center', va='center')
+                ax.set_title(f'Patch Size {patch_size}x{patch_size}')
+                continue
+                
+            # Get distance data
+            distances = patch_results.get('distances', [])
+            if len(distances) == 0:
+                ax.text(0.5, 0.5, 'No distance data available', 
+                       transform=ax.transAxes, ha='center', va='center')
+                ax.set_title(f'Patch Size {patch_size}x{patch_size}')
+                continue
+                
+            distances = np.array(distances)
+            distances = distances[np.isfinite(distances)]
+            
+            if len(distances) == 0:
+                ax.text(0.5, 0.5, 'No valid distance data', 
+                       transform=ax.transAxes, ha='center', va='center')
+                ax.set_title(f'Patch Size {patch_size}x{patch_size}')
+                continue
+            
+            # Plot histogram
+            n_bins = min(50, len(distances) // 10)
+            counts, bins, _ = ax.hist(distances, bins=n_bins, density=True, alpha=0.7, 
+                                    color='lightblue', edgecolor='black', linewidth=0.5, 
+                                    label='Histogram')
+            
+            # Plot distribution fits if available
+            dist_fits = patch_results.get('distribution_fits', {})
+            if 'error' not in dist_fits:
+                x_range = np.linspace(distances.min(), distances.max(), 1000)
+                
+                # Plot Weibull fit
+                if 'weibull' in dist_fits and 'error' not in dist_fits['weibull']:
+                    weibull_params = dist_fits['weibull']['params']
+                    weibull_pdf = stats.weibull_min.pdf(x_range, *weibull_params)
+                    weibull_aic = dist_fits['weibull']['aic']
+                    ax.plot(x_range, weibull_pdf, 'r-', linewidth=2, 
+                           label=f'Weibull (AIC: {weibull_aic:.1f})')
+                
+                # Plot Gumbel fit
+                if 'gumbel' in dist_fits and 'error' not in dist_fits['gumbel']:
+                    gumbel_params = dist_fits['gumbel']['params']
+                    gumbel_pdf = stats.gumbel_r.pdf(x_range, *gumbel_params)
+                    gumbel_aic = dist_fits['gumbel']['aic']
+                    ax.plot(x_range, gumbel_pdf, 'g-', linewidth=2, 
+                           label=f'Gumbel (AIC: {gumbel_aic:.1f})')
+            
+            ax.set_xlabel('Distance')
+            ax.set_ylabel('Density')
+            ax.set_title(f'Patch Size {patch_size}x{patch_size}')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            
+        plt.tight_layout()
+        
+        # Save the plot
+        plot_path = save_path / f'{dataset_name}_distribution_comparison.png'
+        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+        print(f"Saved distribution comparison plot to {plot_path}")
+        plt.show()
+        
+    except Exception as e:
+        print(f"Error in plot_distribution_comparison at line {sys.exc_info()[2].tb_lineno}:")
+        print(f"Error type: {type(e).__name__}")
+        print(f"Error message: {e}")
+        print("Full traceback:")
+        traceback.print_exc()
+
+
 def analyze_multiple_datasets(dataset_names: List[str], get_dataset_func, 
                             data_root: str = './data', patch_sizes: List[int] = [3, 6, 10],
                             num_samples: int = 100, results_dir: str = 'results') -> Dict:
@@ -605,6 +705,12 @@ def analyze_multiple_datasets(dataset_names: List[str], get_dataset_func,
             print(f"Creating visualizations...")
             save_dir = f'{results_dir}/{dataset_name}'
             plot_and_save_results(results, dataset_name, save_dir)
+            
+            # Create distribution comparison plots
+            print(f"Creating distribution comparison plots...")
+            from pathlib import Path
+            save_path = Path(save_dir)
+            plot_distribution_comparison(results, dataset_name, save_path)
             print(f"Completed processing {dataset_name}")
             
         except Exception as e:
@@ -621,7 +727,7 @@ def analyze_multiple_datasets(dataset_names: List[str], get_dataset_func,
         if 'error' in results:
             print(f"{dataset_name}: FAILED - {results['error']}")
         else:
-            patch_count = len([k for k in results.keys() if 'x' in k])
+            patch_count = len([k for k in results.keys() if isinstance(k, int)])
             print(f"{dataset_name}: SUCCESS - {patch_count} patch sizes analyzed")
     
     return all_results 
