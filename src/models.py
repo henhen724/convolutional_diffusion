@@ -34,10 +34,16 @@ class DDIM(nn.Module):
 	def sample(self, batch_size=1, x=None, nsteps=20, label=None, device=None, breakstep=-1, ddpm=False):
 		if device is None:
 			device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+		self.to(device)
 		self.eval()
 		self.backbone.eval()
 		if x is None:
-			x = torch.normal(0,1,(batch_size,self.in_channels,self.default_imsize,self.default_imsize))
+			x = torch.normal(0,1,(batch_size,self.in_channels,self.default_imsize,self.default_imsize)).to(device)
+		else:
+			x = x.to(device)
+		
+		if label is not None:
+			label = label.to(device)
 
 		if ddpm:
 			for i in range(nsteps, 0, -1):
@@ -45,11 +51,11 @@ class DDIM(nn.Module):
 					return x
 
 				t = i*torch.ones(batch_size, device=device)/nsteps
-				beta_t = self.noise_schedule(t)  # Determine the noise level for the current step
+				beta_t = self.noise_schedule(t).to(device)  # Determine the noise level for the current step
 				score = self(t, x, label=label)
 
 				alpha_t = 1 - beta_t
-				alpha_t_prev = 1 - self.noise_schedule(t - 1/nsteps)
+				alpha_t_prev = 1 - self.noise_schedule(t - 1/nsteps).to(device)
 				beta_t_prev = 1 - alpha_t_prev
 				a_t = alpha_t/alpha_t_prev
 				sigma_t = torch.sqrt(beta_t_prev/beta_t)*torch.sqrt(1 - alpha_t/alpha_t_prev)
@@ -65,11 +71,11 @@ class DDIM(nn.Module):
 					return x
 
 				t = i*torch.ones(batch_size, device=device)/nsteps
-				beta_t = self.noise_schedule(t)  # Determine the noise level for the current step
+				beta_t = self.noise_schedule(t).to(device)  # Determine the noise level for the current step
 				score = self(t,x,label=label)
 				
 				alpha_t = 1 - beta_t
-				beta_t_prev = self.noise_schedule(t - 1/nsteps)
+				beta_t_prev = self.noise_schedule(t - 1/nsteps).to(device)
 				alpha_t_prev = 1 - beta_t_prev
 
 				x *= torch.sqrt(alpha_t_prev/alpha_t)[:,None,None,None]
@@ -157,16 +163,25 @@ class MinimalResNet(nn.Module):
 		if label is not None:
 			label = label.to(device)
 
-		embedding_vec = self.embedding(t,label=label)
+		self.embedding = self.embedding.to(device)
+		embedding_vec = self.embedding(t,label=label).to(device)
+		self.up_projection = self.up_projection.to(device)
 		state = self.up_projection(x)
 
 		for i in range(self.num_layers):
+			self.embs[i] = self.embs[i].to(device)
+			self.convs[i] = self.convs[i].to(device)
 			delta = self.convs[i](state + self.embs[i](embedding_vec)[:,:,None,None])
 			state = state + delta
 
-		delta = self.embs[-1](embedding_vec)[:,:,None,None] if len(self.embs) > self.num_layers else state
+		if len(self.embs) > self.num_layers:
+			self.embs[-1] = self.embs[-1].to(device)
+			delta = self.embs[-1](embedding_vec)[:,:,None,None]
+		else:
+			delta = state
 		nextstate = state + delta
 
+		self.down_projection = self.down_projection.to(device)
 		return self.down_projection(nextstate)
 
 class MinimalUNet(nn.Module):
@@ -228,31 +243,42 @@ class MinimalUNet(nn.Module):
 		if label is not None:
 			label = label.to(device)
 
-		embedding_vec = self.embedding(t,label=label)
+		self.embedding = self.embedding.to(device)
+		embedding_vec = self.embedding(t,label=label).to(device)
 
 		skip_connections = []
 
-		for down in self.feature_blocks:
+		for i, down in enumerate(self.feature_blocks):
+			self.feature_blocks[i] = self.feature_blocks[i].to(device)
 			x = down(x,embedding_vec)
 			skip_connections.append(x)
+			self.pool = self.pool.to(device)
 			x = self.pool(x)
 			
+		self.bottleneck = self.bottleneck.to(device)
 		x = self.bottleneck(x,embedding_vec)
 
 		skip_connections = skip_connections[::-1]
 
 		for i in range(len(self.upsamples)):
+			self.upsamples[i] = self.upsamples[i].to(device)
 			upconv = self.upsamples[i](x)
 			skip = skip_connections[i]
 			x = torch.cat((skip, upconv),dim=1)
+			self.output_blocks[i] = self.output_blocks[i].to(device)
 			x = self.output_blocks[i](x,embedding_vec)
 
 		try:
+			self.last_emb = self.last_emb.to(device)
+			self.output_conv = self.output_conv.to(device)
 			if self.last_norm:
+				self.last_normalizer = self.last_normalizer.to(device)
 				return self.output_conv(self.last_normalizer(x+self.last_emb(embedding_vec)[:,:,None,None]))
 			else:
 				return self.output_conv(x+self.last_emb(embedding_vec)[:,:,None,None])	
 		except:
+			self.last_emb = self.last_emb.to(device)
+			self.output_conv = self.output_conv.to(device)
 			return self.output_conv(x+self.last_emb(embedding_vec)[:,:,None,None])
 
 
@@ -289,4 +315,6 @@ class UBlock(nn.Module):
 		# Ensure embedding is on the same device as x
 		device = x.device
 		embedding = embedding.to(device)
+		self.emb = self.emb.to(device)
+		self.model = self.model.to(device)
 		return self.model(x+self.emb(embedding)[:,:,None,None])
