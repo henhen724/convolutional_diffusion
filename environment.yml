@@ -1,5 +1,6 @@
 name: diffusion_env
 channels:
+  - conda-forge
   - defaults
   - https://repo.anaconda.com/pkgs/main
   - https://repo.anaconda.com/pkgs/r
@@ -18,8 +19,9 @@ dependencies:
   - torchaudio
   - torchvision
   - tqdm[version='>=4.62.0']
-  - gdown
   - pytest[version='>=7.0.0']
   - pytest-cov[version='>=4.0.0']
   - coverage[version='>=6.0.0']
-prefix: C:\Users\henhen724\anaconda3\envs\diffusion_env
+  - pip:
+    - gdown
+prefix: C:\Users\henhen724\miniconda3\envs\diffusion_env
