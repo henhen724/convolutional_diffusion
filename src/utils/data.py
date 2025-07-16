@@ -38,43 +38,18 @@ def get_dataset(name, root='./data', dirname=None, train=True):
 			transform=transform
 		)
 	elif name == 'celeba':
-		if dirname is not None:
-			celeba_dir = dirname
-		else:
-			celeba_dir = prepare_celeba_32x32(root, train, transform)
-			dirname = celeba_dir
-
-		train_set = datasets.ImageFolder(
-			root=celeba_dir,
-			transform=transform
+		train_set = datasets.CelebA(
+			root=root,
+			split='train' if train else 'valid',
+			download=True,
+			transform=transforms.Compose([
+				transforms.Resize((32, 32)),
+				transforms.ToTensor(),
+				transforms.Normalize(mean=metadata['mean'], std=metadata['std'])
+			])
 		)
 	return train_set, metadata
 
-def prepare_celeba_32x32(root, train, transform):
-			import os
-
-			from torchvision.datasets import CelebA
-			from torchvision.transforms import ToPILImage
-
-			save_dir = os.path.join(root, "celeba32")
-			if not os.path.exists(save_dir):
-				os.makedirs(save_dir)
-				class_dir = os.path.join(save_dir, "all")
-				os.makedirs(class_dir)
-				celeba_raw = datasets.CelebA(
-					root=root,
-					split='train' if train else 'test',
-					download=True,
-					transform=transforms.Compose([
-						transforms.Resize((32, 32)),
-						transforms.ToTensor()
-					])
-				)
-				for idx in range(len(celeba_raw)):
-					img, _ = celeba_raw[idx]
-					img_pil = ToPILImage()(img)
-					img_pil.save(os.path.join(class_dir, f"{idx:06d}.png"))
-			return save_dir
 
 def get_metadata(name):
 	
