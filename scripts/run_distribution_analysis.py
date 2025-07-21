@@ -56,11 +56,16 @@ def main():
                         patch_results = dataset_results[patch_size]
                         if 'distribution_fits' in patch_results and 'error' not in patch_results['distribution_fits']:
                             dist_fits = patch_results['distribution_fits']
-                            if 'weibull' in dist_fits and 'gumbel' in dist_fits:
+                            if 'weibull' in dist_fits and 'gumbel' in dist_fits and 'gev' in dist_fits:
                                 weibull_aic = dist_fits['weibull']['aic']
                                 gumbel_aic = dist_fits['gumbel']['aic']
-                                better_fit = "Weibull" if weibull_aic < gumbel_aic else "Gumbel"
-                                print(f"   📊 {patch_size}x{patch_size}: {better_fit} better fit (AIC: {min(weibull_aic, gumbel_aic):.1f})")
+                                gev_aic = dist_fits['gev']['aic']
+                                
+                                # Find the best fit (lowest AIC)
+                                aic_values = {'Weibull': weibull_aic, 'Gumbel': gumbel_aic, 'GEV': gev_aic}
+                                better_fit = min(aic_values.keys(), key=lambda k: aic_values[k])
+                                best_aic = min(weibull_aic, gumbel_aic, gev_aic)
+                                print(f"   📊 {patch_size}x{patch_size}: {better_fit} better fit (AIC: {best_aic:.1f})")
         
         print(f"\n📁 Results saved to: {results_dir}/")
         print("📈 Distribution comparison plots created for each dataset")

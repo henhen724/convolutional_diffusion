@@ -17,6 +17,7 @@ from src.utils.patch_statistics import (
     analyze_multiple_datasets,
     analyze_patch_distances,
     fit_distributions,
+    gev_pdf,
     gumbel_pdf,
     plot_and_save_results,
     weibull_pdf,
@@ -84,6 +85,17 @@ class TestDistributionFunctions:
         assert isinstance(result, np.ndarray)
         assert len(result) == len(x)
         assert all(result >= 0)  # PDF values should be non-negative
+    
+    def test_gev_pdf(self):
+        """Test GEV PDF function."""
+        x = np.array([1.0, 2.0, 3.0])
+        shape, loc, scale = 0.1, 1.0, 0.5
+        
+        result = gev_pdf(x, shape, loc, scale)
+        
+        assert isinstance(result, np.ndarray)
+        assert len(result) == len(x)
+        assert all(result >= 0)  # PDF values should be non-negative
 
 
 class TestFitDistributions:
@@ -100,6 +112,7 @@ class TestFitDistributions:
         assert 'error' not in result
         assert 'weibull' in result
         assert 'gumbel' in result
+        assert 'gev' in result
         
         # Check Weibull results
         weibull = result['weibull']
@@ -116,6 +129,14 @@ class TestFitDistributions:
         assert 'ks_statistic' in gumbel
         assert 'ks_pvalue' in gumbel
         assert len(gumbel['params']) == 2  # Gumbel has 2 parameters
+        
+        # Check GEV results
+        gev = result['gev']
+        assert 'params' in gev
+        assert 'aic' in gev
+        assert 'ks_statistic' in gev
+        assert 'ks_pvalue' in gev
+        assert len(gev['params']) == 3  # GEV has 3 parameters
     
     def test_fit_distributions_empty_data(self):
         """Test fitting distributions to empty data."""
@@ -284,6 +305,12 @@ class TestPlotAndSaveResults:
                         'aic': 105.0,
                         'ks_statistic': 0.07,
                         'ks_pvalue': 0.6
+                    },
+                    'gev': {
+                        'params': [0.1, 2.0, 1.0],
+                        'aic': 98.0,
+                        'ks_statistic': 0.04,
+                        'ks_pvalue': 0.9
                     }
                 },
                 'radial_power_spectrum': [10.0, 8.0, 6.0, 4.0]
