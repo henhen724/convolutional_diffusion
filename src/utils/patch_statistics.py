@@ -47,8 +47,23 @@ def gumbel_pdf(x: np.ndarray, loc: float, scale: float) -> np.ndarray:
     return stats.gumbel_r.pdf(x, loc=loc, scale=scale)
 
 
+def gev_pdf(x: np.ndarray, shape: float, loc: float, scale: float) -> np.ndarray:
+    """Generalized Extreme Value probability density function.
+    
+    Args:
+        x: Input values
+        shape: Shape parameter (xi)
+        loc: Location parameter
+        scale: Scale parameter
+        
+    Returns:
+        Probability density values
+    """
+    return stats.genextreme.pdf(x, shape, loc=loc, scale=scale)
+
+
 def fit_distributions(distances: np.ndarray) -> Dict:
-    """Fit Weibull and Gumbel distributions to distance data.
+    """Fit Weibull, Gumbel, and GEV distributions to distance data.
     
     Args:
         distances: Array of distance values
@@ -70,9 +85,14 @@ def fit_distributions(distances: np.ndarray) -> Dict:
         gumbel_params = stats.gumbel_r.fit(distances)
         gumbel_aic = 2 * len(gumbel_params) - 2 * stats.gumbel_r.logpdf(distances, *gumbel_params).sum()
         
+        # Fit GEV distribution
+        gev_params = stats.genextreme.fit(distances)
+        gev_aic = 2 * len(gev_params) - 2 * stats.genextreme.logpdf(distances, *gev_params).sum()
+        
         # Kolmogorov-Smirnov tests
         weibull_ks = stats.kstest(distances, lambda x: stats.weibull_min.cdf(x, *weibull_params))
         gumbel_ks = stats.kstest(distances, lambda x: stats.gumbel_r.cdf(x, *gumbel_params))
+        gev_ks = stats.kstest(distances, lambda x: stats.genextreme.cdf(x, *gev_params))
         
         return {
             'weibull': {
@@ -86,6 +106,12 @@ def fit_distributions(distances: np.ndarray) -> Dict:
                 'aic': gumbel_aic,
                 'ks_statistic': gumbel_ks.statistic,
                 'ks_pvalue': gumbel_ks.pvalue
+            },
+            'gev': {
+                'params': gev_params,
+                'aic': gev_aic,
+                'ks_statistic': gev_ks.statistic,
+                'ks_pvalue': gev_ks.pvalue
             }
         }
     except Exception as e:
@@ -554,7 +580,7 @@ def plot_and_save_results(results: Dict, dataset_name: str, save_dir: Union[str,
 
 
 def plot_distribution_comparison(results: Dict, dataset_name: str, save_path: Path):
-    """Create plots showing histogram with Gumbel vs Weibull distribution fits.
+    """Create plots showing histogram with Weibull, Gumbel, and GEV distribution fits.
     
     Args:
         results: Analysis results containing distance data and fits
@@ -629,6 +655,14 @@ def plot_distribution_comparison(results: Dict, dataset_name: str, save_path: Pa
                     gumbel_aic = dist_fits['gumbel']['aic']
                     ax.plot(x_range, gumbel_pdf, 'g-', linewidth=2, 
                            label=f'Gumbel (AIC: {gumbel_aic:.1f})')
+                
+                # Plot GEV fit
+                if 'gev' in dist_fits and 'error' not in dist_fits['gev']:
+                    gev_params = dist_fits['gev']['params']
+                    gev_pdf = stats.genextreme.pdf(x_range, *gev_params)
+                    gev_aic = dist_fits['gev']['aic']
+                    ax.plot(x_range, gev_pdf, 'b-', linewidth=2, 
+                           label=f'GEV (AIC: {gev_aic:.1f})')
             
             ax.set_xlabel('Distance')
             ax.set_ylabel('Density')
