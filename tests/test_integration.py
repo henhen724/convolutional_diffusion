@@ -171,7 +171,7 @@ class TestModelSaving:
         
         try:
             # Load model
-            loaded_model = torch.load(tmp_file_path)
+            loaded_model = torch.load(tmp_file_path, weights_only=False)
             
             # Get output from loaded model
             loaded_output = loaded_model(t, x)

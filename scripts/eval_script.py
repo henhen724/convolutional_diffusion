@@ -31,7 +31,7 @@ def main():
 
 	device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-	model = torch.load(args.model_fname, map_location=device)
+	model = torch.load(args.model_fname, map_location=device, weights_only=False)
 	model.noise_schedule = cosine_noise_schedule
 	model.eval()
 
@@ -48,20 +48,20 @@ def main():
 
 	n = 0
 	while os.path.exists(os.path.join(SEEDPATH, f'{n:04d}.pt')):
-		seed = torch.load(os.path.join(SEEDPATH, f'{n:04d}.pt'), map_location=device)
+		seed = torch.load(os.path.join(SEEDPATH, f'{n:04d}.pt'), map_location=device, weights_only=False)
 		
 		if args.conditional:
-			label = torch.load(os.path.join(LPATH, f'{n:04d}.pt'), map_location=device)
+			label = torch.load(os.path.join(LPATH, f'{n:04d}.pt'), map_location=device, weights_only=False)
 		
 		output = model.sample(x=seed.clone(), nsteps=20, label=torch.tensor(label) if args.conditional else None)
 		norm_output = output - torch.mean(output)
 		norm_output = norm_output / torch.norm(norm_output)
 
-		theoretical = torch.load(os.path.join(OUTPATH, f'{n:04d}.pt'), map_location=device)
+		theoretical = torch.load(os.path.join(OUTPATH, f'{n:04d}.pt'), map_location=device, weights_only=False)
 		norm_theoretical = theoretical - torch.mean(theoretical)
 		norm_theoretical = norm_theoretical / torch.norm(norm_theoretical)
 
-		ideal = torch.load(os.path.join(IPATH, f'{n:04d}.pt'), map_location=device)
+		ideal = torch.load(os.path.join(IPATH, f'{n:04d}.pt'), map_location=device, weights_only=False)
 		norm_ideal = ideal - torch.mean(ideal)
 		norm_ideal = norm_ideal / torch.norm(norm_ideal)
 

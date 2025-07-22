@@ -255,6 +255,89 @@ def test_cnn_compatibility():
     print("✓ CNN compatibility test passed\n")
 
 
+def test_curl_magnitude():
+    """Test that a field with non-zero curl has a non-zero curl magnitude."""
+    print("Testing curl magnitude...")
+    
+    def vortex_field(x):
+        """Vortex field: f(x,y) = (-y, x) - has constant curl = 2"""
+        return torch.stack([-x[:, 1], x[:, 0]], dim=1)
+    
+    def uniform_field(x):
+        """Uniform field: f(x,y) = (1, 0) - has zero curl"""
+        batch_size = x.shape[0]
+        return torch.stack([
+            torch.ones(batch_size, device=x.device),
+            torch.zeros(batch_size, device=x.device)
+        ], dim=1)
+    
+    def shear_field(x):
+        """Shear field: f(x,y) = (y, 0) - has curl = -1"""
+        return torch.stack([x[:, 1], torch.zeros_like(x[:, 0])], dim=1)
+    
+    def varying_field(x):
+        """Spatially varying field: f(x,y) = (x*y, x²) - curl varies with position"""
+        return torch.stack([x[:, 0] * x[:, 1], x[:, 0]**2], dim=1)
+    
+    x = torch.tensor([[1.0, 2.0], [3.0, 4.0], [0.5, -1.5]], requires_grad=True)
+    
+    # Test vortex field (should have non-zero curl)
+    exterior_deriv_vortex = compute_exterior_derivative(x, vortex_field)
+    curl_magnitude_vortex = exterior_derivative_magnitude(exterior_deriv_vortex)
+    
+    print(f"Vortex field exterior derivative:\n{exterior_deriv_vortex}")
+    print(f"Vortex field curl magnitude: {curl_magnitude_vortex}")
+    
+    # Verify magnitude calculation manually for first point
+    first_point_matrix = exterior_deriv_vortex[0]  # 2x2 matrix for first point
+    manual_magnitude = torch.sqrt(torch.sum(first_point_matrix**2))
+    print(f"Manual magnitude calculation for first point: {manual_magnitude}")
+    print(f"Should match first magnitude entry: {curl_magnitude_vortex[0]}")
+    
+    # Test uniform field (should have zero curl)
+    exterior_deriv_uniform = compute_exterior_derivative(x, uniform_field)
+    curl_magnitude_uniform = exterior_derivative_magnitude(exterior_deriv_uniform)
+    
+    print(f"Uniform field curl magnitude: {curl_magnitude_uniform}")
+    
+    # Test shear field (should have non-zero curl)
+    exterior_deriv_shear = compute_exterior_derivative(x, shear_field)
+    curl_magnitude_shear = exterior_derivative_magnitude(exterior_deriv_shear)
+    
+    print(f"Shear field curl magnitude: {curl_magnitude_shear}")
+    
+    # Test spatially varying field (should have different magnitudes at different points)
+    exterior_deriv_varying = compute_exterior_derivative(x, varying_field)
+    curl_magnitude_varying = exterior_derivative_magnitude(exterior_deriv_varying)
+    
+    print(f"Varying field curl magnitude: {curl_magnitude_varying}")
+    print("Note: Different values show curl varies with position!")
+    
+    # Assertions
+    assert torch.all(curl_magnitude_vortex > 1e-6), \
+        f"Vortex field should have non-zero curl magnitude, got {curl_magnitude_vortex}"
+    
+    assert torch.all(curl_magnitude_uniform < 1e-6), \
+        f"Uniform field should have zero curl magnitude, got {curl_magnitude_uniform}"
+    
+    assert torch.all(curl_magnitude_shear > 1e-6), \
+        f"Shear field should have non-zero curl magnitude, got {curl_magnitude_shear}"
+    
+    # Check that vortex field has expected magnitude (curl = 2 for vortex field)
+    # For 2D: curl = ∂f₂/∂x - ∂f₁/∂y = ∂x/∂x - ∂(-y)/∂y = 1 - (-1) = 2
+    # But exterior derivative gives antisymmetric matrix, so magnitude is √2 * |curl|
+    expected_vortex_magnitude = 2.0 * np.sqrt(2)
+    expected_tensor = torch.tensor(expected_vortex_magnitude, dtype=curl_magnitude_vortex.dtype, device=curl_magnitude_vortex.device)
+    assert torch.allclose(curl_magnitude_vortex, expected_tensor, atol=1e-5), \
+        f"Vortex field should have magnitude {expected_vortex_magnitude}, got {curl_magnitude_vortex}"
+    
+    # Check that varying field has different magnitudes at different points
+    assert not torch.allclose(curl_magnitude_varying[0], curl_magnitude_varying[1], atol=1e-6), \
+        f"Varying field should have different magnitudes at different points, got {curl_magnitude_varying}"
+    
+    print("✓ Curl magnitude test passed\n")
+
+
 def test_gradient_flow():
     """Test that the exterior derivative can be used in gradient-based optimization."""
     print("Testing gradient flow...")
@@ -301,6 +384,7 @@ def main():
         test_2d_tensors()
         test_3d_tensors()
         test_cnn_compatibility()
+        test_curl_magnitude()
         test_gradient_flow()
         
         print("🎉 All tests passed!")
