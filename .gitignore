@@ -200,7 +200,6 @@ results/
 outputs/
 samples/
 generated/
-experiments/
 
 # Temporary files
 tmp/

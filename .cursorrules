@@ -1,0 +1,125 @@
+# Cursor Rules for Convolutional Diffusion Project
+
+## Terminal Setup - IMPORTANT
+
+**Conda Fix Required**: This project uses conda environments, but the terminal doesn't automatically source conda initialization. 
+
+**Always start terminal commands with:**
+```bash
+source ~/.bash_profile && conda activate diffusion_env && [your_command]
+```
+
+**Examples:**
+```bash
+# Run tests
+source ~/.bash_profile && conda activate diffusion_env && python tests/test_exterior_derivative.py
+
+# Run demo
+source ~/.bash_profile && conda activate diffusion_env && python examples/exterior_derivative_demo.py
+
+# Run analysis scripts
+source ~/.bash_profile && conda activate diffusion_env && python scripts/els_script.py --dataset cifar10
+```
+
+## Project Structure
+
+### Key Directories:
+- `src/` - Core source code
+  - `models.py` - DDIM, UNet, ResNet implementations
+  - `utils/` - Utility modules
+    - `exterior_derivative.py` - Exterior derivative computation
+    - `idealscore.py` - ELS (Equivalent Locality Score) implementations
+    - `data.py` - Dataset loading utilities
+    - `noise_schedules.py` - Noise scheduling functions
+- `checkpoints/` - Pre-trained models and scales files
+- `results/` - All output files (experiments, analysis, demos)
+- `scripts/` - Analysis and training scripts
+- `examples/` - Demo scripts
+- `tests/` - Test suite
+
+### File Naming Conventions:
+- Models: `backbone_DATASET_MODEL_variant.pt`
+- Scales: `scales_DATASET_MODEL_variant.pt` 
+- Results: Organized under `results/` by experiment type
+
+## Code Guidelines
+
+### torch.load Usage:
+Always use `weights_only=False` to avoid warnings:
+```python
+model = torch.load(path, map_location=device, weights_only=False)
+```
+
+### Dataset Support:
+- MNIST (1 channel, 32x32)
+- CIFAR-10 (3 channels, 32x32)  
+- FashionMNIST (1 channel, 32x32)
+- CelebA (3 channels, 32x32)
+
+### Model Architectures:
+- **UNet**: `MinimalUNet` - encoder-decoder with skip connections
+- **ResNet**: `MinimalResNet` - residual blocks with embedding
+- **ELS**: Analytical score functions with locality constraints
+
+## Exterior Derivative Analysis
+
+### Key Concepts:
+- Exterior derivative measures "curl-like" behavior of score functions
+- Computed using automatic differentiation on the Jacobian
+- Antisymmetric part: `(df)_ij = ∂_i f_j - ∂_j f_i`
+- Magnitude represents strength of rotational behavior
+
+### Usage:
+```python
+from src.utils.exterior_derivative import compute_exterior_derivative, exterior_derivative_magnitude
+
+# For score function analysis
+exterior_deriv = compute_exterior_derivative(x_flat, score_function)
+magnitude = exterior_derivative_magnitude(exterior_deriv)
+```
+
+## Testing
+
+### Run All Tests:
+```bash
+source ~/.bash_profile && conda activate diffusion_env && python -m pytest tests/ -v
+```
+
+### Run Specific Tests:
+```bash
+source ~/.bash_profile && conda activate diffusion_env && python tests/test_exterior_derivative.py
+```
+
+## Common Tasks
+
+### Generate ELS Samples:
+```bash
+source ~/.bash_profile && conda activate diffusion_env && python scripts/els_script.py --dataset cifar10 --conditional --numiters 50
+```
+
+### Calibrate Scales:
+```bash
+source ~/.bash_profile && conda activate diffusion_env && python scripts/scales_calibration.py --modelfile backbone_MNIST_ResNet_zeros.pt --dataset mnist --kernelsizes 3 5 7 9 11
+```
+
+### Run Exterior Derivative Demo:
+```bash
+source ~/.bash_profile && conda activate diffusion_env && python examples/exterior_derivative_demo.py
+```
+
+## Environment Requirements
+
+The project uses the `diffusion_env` conda environment with:
+- PyTorch
+- torchvision
+- matplotlib
+- numpy
+- scipy
+- pytest (for testing)
+
+## Notes
+
+- Auto-detection of scales and model files from `checkpoints/` directory
+- Results saved to `results/` instead of `experiments/`
+- ELS models require substantial computation time and dataset access
+- All scripts support both conditional and unconditional generation 

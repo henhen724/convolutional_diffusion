@@ -19,6 +19,16 @@ from src.utils.idealscore import (
 from src.utils.noise_schedules import cosine_noise_schedule
 
 ## GENERATES ELS MACHINE OUTPUTS
+##
+## Updated file structure:
+## - Scales files: ./checkpoints/scales_DATASET_MODEL_*.pt
+## - Model files: ./checkpoints/backbone_DATASET_MODEL_*.pt  
+## - Output results: ./results/EXPNAME/
+##
+## Auto-detects scales files from checkpoints directory if --scalesfile not specified
+##
+## Example usage:
+## python scripts/els_script.py --dataset cifar10 --conditional --scoremoduletype bbELS --numiters 50
 
 def main():
 
@@ -28,7 +38,7 @@ def main():
 	parser.add_argument('--dataset', type=str, default='mnist')
 	parser.add_argument('--scoremoduletype', type=str, default='bbELS') # options: boundary broken ELS (bbELS), ELS, LS, and IS
 	parser.add_argument('--conditional', action="store_true", default=False)
-	parser.add_argument('--scalesfile', type=str, default='scales.pt') # file with scales
+	parser.add_argument('--scalesfile', type=str, default=None) # file with scales (auto-detected from checkpoints if None)
 	parser.add_argument('--scorebatchsize', type=int, default=256)
 	parser.add_argument('--fill', action="store_true", default=False)
 	parser.add_argument('--numiters', type=int, default=100)
@@ -85,13 +95,41 @@ def main():
 	else:
 		raise ValueError(f"Unknown scoremoduletype: {args.scoremoduletype}")
 
-	scales = list(torch.load(args.scalesfile).int().numpy())
-	scales = [int(s) for s in scales]
+	# Auto-detect scales file if not provided
+	if args.scalesfile is None:
+		dataset_name_upper = metadata['name'].upper()
+		possible_scales_files = [
+			f'./checkpoints/scales_{dataset_name_upper}_ResNet_zeros_conditional.pt',
+			f'./checkpoints/scales_{dataset_name_upper}_ResNet_zeros.pt',
+			f'./checkpoints/scales_{dataset_name_upper}_UNet_zeros_conditional.pt',
+			f'./checkpoints/scales_{dataset_name_upper}_UNet_zeros.pt'
+		]
+		
+		scales_file = None
+		for candidate in possible_scales_files:
+			if os.path.exists(candidate):
+				scales_file = candidate
+				print(f"Auto-detected scales file: {scales_file}")
+				break
+		
+		if scales_file is None:
+			raise FileNotFoundError(f"No scales file found. Please specify --scalesfile or ensure scales exist in ./checkpoints/")
+		args.scalesfile = scales_file
+	
+	scales_data = torch.load(args.scalesfile, weights_only=False)
+	# Handle both tensor and list formats
+	if isinstance(scales_data, torch.Tensor):
+		scales = list(scales_data.int().numpy())
+		scales = [int(s) for s in scales]
+	elif isinstance(scales_data, list):
+		scales = [int(s) for s in scales_data]
+	else:
+		scales = scales_data
 
 	machine = ScheduledScoreMachine(mod, in_channels=in_channels, noise_schedule=schedule, score_backbone=True, scales=scales)
 
 
-	DPATH = os.path.join('./experiments', expname)
+	DPATH = os.path.join('./results', expname)
 	SEEDPATH = os.path.join(DPATH, 'seeds')
 	SPATH = os.path.join(DPATH, args.idealname)
 	if args.conditional:
@@ -115,9 +153,9 @@ def main():
 
 		i = 0
 		while os.path.exists(os.path.join(SEEDPATH, f'{i:04d}.pt')):
-			seed = torch.load(os.path.join(SEEDPATH, f'{i:04d}.pt'))
+			seed = torch.load(os.path.join(SEEDPATH, f'{i:04d}.pt'), weights_only=False)
 			if args.conditional:
-				label = torch.load(os.path.join(LPATH, f'{i:04d}.pt'))
+				label = torch.load(os.path.join(LPATH, f'{i:04d}.pt'), weights_only=False)
 			else:
 				label = None
 

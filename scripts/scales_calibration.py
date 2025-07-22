@@ -20,11 +20,19 @@ from src.utils.noise_schedules import cosine_noise_schedule
 
 '''
 THIS SCRIPT CALIBRATES THE EFFECTIVE LOCALITY SCALES OF THE NN MODELS FOR COMPARISON WITH ELS MACHINE
+
+Updated file structure:
+- Input models: ./checkpoints/backbone_DATASET_MODEL_*.pt
+- Output scales: ./checkpoints/scales_*.pt (saved to --tld directory)
+- Default output directory: ./checkpoints/
+
+Example usage:
+python scripts/scales_calibration.py --modelfile backbone_MNIST_ResNet_zeros.pt --dataset mnist --kernelsizes 3 5 7 9 11
 '''
 
 def calibrate(
-	kfilename='kfile',
-	tld='./scales/',
+	kfilename='scales',
+	tld='./checkpoints/',
 	modelfile=None,
 	dataset_name='mnist',
 	scoremoduletype='bbELS',
@@ -71,7 +79,7 @@ def calibrate(
 	# Load Model
 	# --------------------
 	fname = os.path.join(tld, modelfile)
-	model = torch.load(fname, map_location=device)
+	model = torch.load(fname, map_location=device, weights_only=False)
 	model.eval()
 	model.to(device)
 
@@ -182,8 +190,8 @@ def calibrate(
 
 def main():
 	parser = argparse.ArgumentParser(description='Calibrate')
-	parser.add_argument('--kfilename', type=str, default='kfile')
-	parser.add_argument('--tld', type=str, default='./scales/')
+	parser.add_argument('--kfilename', type=str, default='scales')
+	parser.add_argument('--tld', type=str, default='./checkpoints/')
 	parser.add_argument('--modelfile', type=str, default=None)
 	parser.add_argument('--dataset', type=str, default='mnist')
 	parser.add_argument('--scoremoduletype', type=str, default='bbELS') 
@@ -217,10 +225,18 @@ def main():
 		maxsamps=args.maxsamps
 	)
 
-	# Save the returned data
-	torch.save(results['k_optimals'], f"{args.kfilename}_k_optimals.pt")
-	torch.save(results['median'],     f"{args.kfilename}_median.pt")
-	torch.save(results['mode'],       f"{args.kfilename}_mode.pt")
+	# Save the returned data to the target directory
+	output_dir = args.tld
+	os.makedirs(output_dir, exist_ok=True)
+	
+	torch.save(results['k_optimals'], os.path.join(output_dir, f"{args.kfilename}_k_optimals.pt"))
+	torch.save(results['median'],     os.path.join(output_dir, f"{args.kfilename}_median.pt"))
+	torch.save(results['mode'],       os.path.join(output_dir, f"{args.kfilename}_mode.pt"))
+	
+	print(f"Results saved to {output_dir}")
+	print(f"  - {args.kfilename}_k_optimals.pt")
+	print(f"  - {args.kfilename}_median.pt") 
+	print(f"  - {args.kfilename}_mode.pt")
 
 
 if __name__ == '__main__':
