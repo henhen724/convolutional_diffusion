@@ -69,12 +69,16 @@ class ExteriorDerivative(nn.Module):
         # For each batch element, compute the Jacobian
         jacobian_matrices = []
         for b in range(batch_size):
+            # Get the batch element and ensure it requires grad
+            # Clone to avoid issues with sliced tensors
+            x_b = x[b].clone().detach().requires_grad_(True)
+            
             # Define function for single batch element
             def single_func(x_single):
                 return function(x_single.unsqueeze(0)).squeeze(0)
             
             # Compute Jacobian for this batch element
-            jac = jacobian(single_func, x[b], create_graph=True)
+            jac = jacobian(single_func, x_b, create_graph=True)
             jacobian_matrices.append(jac)
         
         # Stack Jacobians and compute exterior derivative
@@ -103,6 +107,10 @@ class ExteriorDerivative(nn.Module):
         if function is None:
             raise ValueError("No function provided for exterior derivative computation")
         
+        # Ensure x requires gradients
+        if not x.requires_grad:
+            x = x.detach().requires_grad_(True)
+        
         # Store original shape
         original_shape = x.shape
         batch_size = original_shape[0]
@@ -123,12 +131,16 @@ class ExteriorDerivative(nn.Module):
         # For each batch element, compute the Jacobian
         jacobian_matrices = []
         for b in range(batch_size):
+            # Get the batch element and ensure it requires grad
+            # Clone to avoid issues with sliced tensors
+            x_flat_b = x_flat[b].clone().detach().requires_grad_(True)
+            
             # Define function for single batch element
             def single_func(x_single):
                 return flat_function(x_single.unsqueeze(0)).squeeze(0)
             
             # Compute Jacobian for this batch element
-            jac = jacobian(single_func, x_flat[b], create_graph=True)
+            jac = jacobian(single_func, x_flat_b, create_graph=True)
             jacobian_matrices.append(jac)
         
         # Stack Jacobians and compute exterior derivative
