@@ -18,7 +18,16 @@ class ExteriorDerivativeAnalyzer:
     during the reverse diffusion process.
     """
     
-    def __init__(self, dataset_name='mnist', device=None, nsteps=20):
+    def __init__(
+        self,
+        dataset_name='mnist',
+        device=None,
+        nsteps=20,
+        subset_dim=None,
+        subset_seed=0,
+        els_max_samples=1000,
+        els_batch_size=64
+    ):
         """
         Initialize the analyzer.
         
@@ -30,6 +39,11 @@ class ExteriorDerivativeAnalyzer:
         self.dataset_name = dataset_name
         self.device = device if device else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.nsteps = nsteps
+        self.subset_dim = subset_dim
+        self.subset_seed = subset_seed
+        self.subset_indices = None
+        self.els_max_samples = els_max_samples
+        self.els_batch_size = els_batch_size
         self.noise_schedule = cosine_noise_schedule
         
         # Load dataset
@@ -40,6 +54,18 @@ class ExteriorDerivativeAnalyzer:
         print(f"Initialized analyzer for {dataset_name}")
         print(f"Image size: {self.image_size}, Channels: {self.in_channels}")
         print(f"Device: {self.device}")
+        if self.subset_dim is not None:
+            print(f"ED subset dim: {self.subset_dim} (seed={self.subset_seed})")
+        print(f"ELS max_samples: {self.els_max_samples}, batch_size: {self.els_batch_size}")
+
+    def _get_subset_indices(self, total_dim):
+        if self.subset_dim is None or self.subset_dim >= total_dim:
+            return None
+        if self.subset_indices is None:
+            rng = np.random.default_rng(self.subset_seed)
+            indices = rng.choice(total_dim, size=self.subset_dim, replace=False)
+            self.subset_indices = torch.as_tensor(indices, device=self.device, dtype=torch.long)
+        return self.subset_indices
     
     def load_models(self, unet_path=None, resnet_path=None, scales_path=None):
         """
@@ -111,11 +137,11 @@ class ExteriorDerivativeAnalyzer:
         print("Creating ELS model")
         els_backbone = LocalEquivBordersScoreModule(
             self.dataset,
-            batch_size=64,
+            batch_size=self.els_batch_size,
             image_size=self.image_size,
             channels=self.in_channels,
             schedule=self.noise_schedule,
-            max_samples=1000
+            max_samples=self.els_max_samples
         )
         
         self.models['els'] = ScheduledScoreMachine(
@@ -171,14 +197,28 @@ class ExteriorDerivativeAnalyzer:
                     def score_function(x_flat):
                         # Reshape flattened input back to image shape
                         x_img = x_flat.view(1, self.in_channels, self.image_size, self.image_size)
-                        return model.backbone(t, x_img, device=self.device).flatten()
+                        score = model.backbone(t, x_img, device=self.device)
+                        return score.view(1, -1)
                     
                     # Flatten x for exterior derivative computation
                     x_flat = x.view(1, -1)
                     
                     # Compute exterior derivative
                     try:
-                        exterior_deriv = compute_exterior_derivative(x_flat, score_function)
+                        subset_indices = self._get_subset_indices(x_flat.shape[1])
+                        if subset_indices is None:
+                            exterior_deriv = compute_exterior_derivative(x_flat, score_function)
+                        else:
+                            x_sub = x_flat[:, subset_indices]
+
+                            def score_function_sub(x_sub_flat):
+                                x_base = x_flat.detach()
+                                x_full = x_base.clone()
+                                x_full = x_full.index_copy(1, subset_indices, x_sub_flat)
+                                score_full = score_function(x_full)
+                                return score_full[:, subset_indices]
+
+                            exterior_deriv = compute_exterior_derivative(x_sub, score_function_sub)
                         ed_magnitude = exterior_derivative_magnitude(exterior_deriv)
                         ed_magnitudes.append(ed_magnitude.item())
                     except Exception as e:
@@ -193,14 +233,28 @@ class ExteriorDerivativeAnalyzer:
                     def score_function(x_flat):
                         # Reshape flattened input back to image shape  
                         x_img = x_flat.view(1, self.in_channels, self.image_size, self.image_size)
-                        return model.backbone(t, x_img).flatten()
+                        score = model.backbone(t, x_img)
+                        return score.view(1, -1)
                     
                     # Flatten x for exterior derivative computation
                     x_flat = x.view(1, -1)
                     
                     # Compute exterior derivative
                     try:
-                        exterior_deriv = compute_exterior_derivative(x_flat, score_function)
+                        subset_indices = self._get_subset_indices(x_flat.shape[1])
+                        if subset_indices is None:
+                            exterior_deriv = compute_exterior_derivative(x_flat, score_function)
+                        else:
+                            x_sub = x_flat[:, subset_indices]
+
+                            def score_function_sub(x_sub_flat):
+                                x_base = x_flat.detach()
+                                x_full = x_base.clone()
+                                x_full = x_full.index_copy(1, subset_indices, x_sub_flat)
+                                score_full = score_function(x_full)
+                                return score_full[:, subset_indices]
+
+                            exterior_deriv = compute_exterior_derivative(x_sub, score_function_sub)
                         ed_magnitude = exterior_derivative_magnitude(exterior_deriv)
                         ed_magnitudes.append(ed_magnitude.item())
                     except Exception as e:
@@ -485,6 +539,14 @@ def main():
                        help='Number of diffusion steps')
     parser.add_argument('--output_dir', type=str, default='./results/exterior_derivative',
                        help='Output directory for results')
+    parser.add_argument('--subset_dim', type=int, default=None,
+                       help='Compute ED on a random subset of dimensions (CPU-friendly)')
+    parser.add_argument('--subset_seed', type=int, default=0,
+                       help='Random seed for subset dimension selection')
+    parser.add_argument('--els_max_samples', type=int, default=1000,
+                       help='Max samples for ELS backbone')
+    parser.add_argument('--els_batch_size', type=int, default=64,
+                       help='Batch size for ELS backbone')
     parser.add_argument('--unet_path', type=str, default=None,
                        help='Path to UNet checkpoint')
     parser.add_argument('--resnet_path', type=str, default=None,
@@ -497,7 +559,11 @@ def main():
     # Create analyzer
     analyzer = ExteriorDerivativeAnalyzer(
         dataset_name=args.dataset,
-        nsteps=args.nsteps
+        nsteps=args.nsteps,
+        subset_dim=args.subset_dim,
+        subset_seed=args.subset_seed,
+        els_max_samples=args.els_max_samples,
+        els_batch_size=args.els_batch_size
     )
     
     # Load models
