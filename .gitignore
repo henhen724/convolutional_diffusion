@@ -153,16 +153,16 @@ dmypy.json
 cython_debug/
 
 # PyTorch
-*.pth
-*.pt
-*.pkl
+**.pth
+**.pt
+**.pkl
 
 # TensorFlow
-*.ckpt
-*.pb
-*.meta
-*.index
-*.data-00000-of-00001
+**.ckpt
+**.pb
+**.meta
+**.index
+**.data-00000-of-00001
 
 # Keras
 *.h5
