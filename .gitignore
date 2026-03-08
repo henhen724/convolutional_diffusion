@@ -177,10 +177,6 @@ runs/
 logs/
 wandb/
 
-# Allow tracking of checkpoints directory
-#!checkpoints/
-#!checkpoints/*.pt
-
 # Data files
 data/
 datasets/
@@ -257,7 +253,9 @@ dvc.lock
 **.rar
 **.7z
 **.pt
+# Checkpoints (models, scales) - do not track; keep local only
 /checkpoints
+checkpoints/
 
 # Documentation builds
 docs/build/
