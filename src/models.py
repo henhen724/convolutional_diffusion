@@ -28,8 +28,8 @@ class DDIM(nn.Module):
 			self.backbone = MinimalUNet(channels=in_channels)
 		self.noise_schedule = noise_schedule
 
-	def forward(self, t, x, label=None):
-		return self.backbone(t,x,label=label)
+	def forward(self, t, x, label=None, **kwargs):
+		return self.backbone(t, x, label=label, **kwargs)
 
 	def sample(self, batch_size=1, x=None, nsteps=20, label=None, device=None, breakstep=-1, ddpm=False):
 		if device is None:
@@ -156,7 +156,7 @@ class MinimalResNet(nn.Module):
 		else:
 			self.down_projection = nn.Sequential(nn.GroupNorm(8,emb_dim), nn.Conv2d(emb_dim, channels, lastksize, padding='same', padding_mode=mode))
 
-	def forward(self, t, x, label=None):
+	def forward(self, t, x, label=None, **kwargs):
 		# Ensure all components are on the same device as input
 		device = x.device
 		t = t.to(device)
@@ -236,7 +236,7 @@ class MinimalUNet(nn.Module):
 			elif normalization == 'BatchNorm':
 				self.last_normalizer = nn.BatchNorm2d(fsizes[0])
 
-	def forward(self, t, x, label=None):
+	def forward(self, t, x, label=None, **kwargs):
 		# Ensure all components are on the same device as input
 		device = x.device
 		t = t.to(device)

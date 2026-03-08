@@ -119,8 +119,7 @@ def main():
 	scales_data = torch.load(args.scalesfile, weights_only=False)
 	# Handle both tensor and list formats
 	if isinstance(scales_data, torch.Tensor):
-		scales = list(scales_data.int().numpy())
-	scales = [int(s) for s in scales]
+		scales = [int(s) for s in scales_data.int().numpy()]
 	elif isinstance(scales_data, list):
 		scales = [int(s) for s in scales_data]
 	else:

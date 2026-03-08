@@ -11,6 +11,8 @@ This approach works on both login and compute nodes.
 source ~/activate_diffusion.sh && [your_command]
 ```
 
+**Slurm (Sherlock)**: When on sherlock.stanford.edu, always use partition `sganguli` in Slurm scripts (e.g. `#SBATCH --partition=sganguli`). Do not use `normal` or `gpu` for this project.
+
 **Examples:**
 ```bash
 # Run tests
@@ -62,6 +64,9 @@ model = torch.load(path, map_location=device, weights_only=False)
 - **UNet**: `MinimalUNet` - encoder-decoder with skip connections
 - **ResNet**: `MinimalResNet` - residual blocks with embedding
 - **ELS**: Analytical score functions with locality constraints
+
+### Plot titles:
+- **Always include the dataset name** in all plot titles (e.g. `ax.set_title(...)`, `fig.suptitle(...)`, `plt.title(...)`). Use the variable or string that identifies the dataset (e.g. `dataset_name`, `metadata["name"]`, or `"MNIST"`) so figures are self-explanatory.
 
 ## Exterior Derivative Analysis
 

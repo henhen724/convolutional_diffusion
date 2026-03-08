@@ -178,8 +178,8 @@ logs/
 wandb/
 
 # Allow tracking of checkpoints directory
-!checkpoints/
-!checkpoints/*.pt
+#!checkpoints/
+#!checkpoints/*.pt
 
 # Data files
 data/
@@ -252,10 +252,12 @@ ray_results/
 dvc.lock
 
 # Large files
-*.zip
-*.tar.gz
-*.rar
-*.7z
+**.zip
+**.tar.gz
+**.rar
+**.7z
+**.pt
+/checkpoints
 
 # Documentation builds
 docs/build/
@@ -274,7 +276,7 @@ config/local.yml
 *~
 
 # Project specific
-*.log
+**.log
 logs/
-*.out
-*.err 
+**.out
+**.err 

@@ -9,6 +9,7 @@ from tqdm import tqdm
 def train_diffusion(model, train_loader, noise_schedule, device,
 					max_t=1000,
 					num_epochs=100,
+					start_epoch=0,
 					lr=2e-4,
 					samp_sched=30,
 					in_channels=3,
@@ -25,7 +26,7 @@ def train_diffusion(model, train_loader, noise_schedule, device,
 	# Default scheduler we use is exponential
 	scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=gamma)
 
-	for epoch in range(num_epochs):
+	for epoch in range(start_epoch, start_epoch + num_epochs):
 		model.train()
 		loop = tqdm(train_loader, leave=True)
 		for images, labels in loop:
@@ -54,11 +55,12 @@ def train_diffusion(model, train_loader, noise_schedule, device,
 			loss.backward()
 			optimizer.step()
 
-			loop.set_description(f"Epoch [{epoch+1}/{num_epochs}]")
+			loop.set_description(f"Epoch [{epoch+1}/{start_epoch + num_epochs}]")
 			loop.set_postfix(loss=loss.item())
 
 			scheduler.step()
 
-		if epoch % save_interval == save_interval-1:
+		# Save at epoch 0, 10, 20, ... and at the final epoch
+		if epoch % save_interval == 0 or epoch == start_epoch + num_epochs - 1:
 			torch.save(model, fname + f'_epoch{epoch}.pt')
 

@@ -66,7 +66,7 @@ def calibrate(
 	# --------------------
 	dataset, metadata = get_dataset(dataset_name, root='./data')
 	if maxsamps < len(dataset):
-		dataset = torch.utils.data.Subset(dataset, [i for i in range(maxsamps)])
+		dataset = torch.utils.data.Subset(dataset, range(maxsamps))
 	in_channels = metadata['num_channels']
 	image_size = metadata['image_size']
 

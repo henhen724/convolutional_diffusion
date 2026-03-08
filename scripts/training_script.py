@@ -30,6 +30,13 @@ def main():
 	parser.add_argument('--suppress', action="store_true", default=False)
 	parser.add_argument('--gamma', type=float, default=0.999965)
 	parser.add_argument('--maxsamps', type=int, default=100000)
+	parser.add_argument('--num_workers', type=int, default=4)
+	parser.add_argument('--savename', type=str, default=None,
+		help='If set, use homedir/savename as checkpoint base (e.g. backbone_CelebA_ResNet)')
+	parser.add_argument('--resume', type=str, default=None,
+		help='Path to checkpoint to resume from (e.g. checkpoints/backbone_CelebA_ResNet_epoch39.pt). Requires --savename and --total_epochs.')
+	parser.add_argument('--total_epochs', type=int, default=None,
+		help='When using --resume, train until this epoch (inclusive). E.g. 500 to run epochs 40..500.')
 
 	args = parser.parse_args()
 
@@ -39,26 +46,34 @@ def main():
 	factor = 1
 	if subset_flag:
 		factor = len(dataset)//args.maxsamps
-		dataset = torch.utils.data.Subset(dataset, [i for i in range(args.maxsamps)])
+		dataset = torch.utils.data.Subset(dataset, range(args.maxsamps))
 
-	train_loader = DataLoader(dataset, batch_size=args.batchsize, shuffle=True)
+	train_loader = DataLoader(
+		dataset,
+		batch_size=args.batchsize,
+		shuffle=True,
+		num_workers=args.num_workers,
+		pin_memory=torch.cuda.is_available(),
+	)
 
-	if args.resnet:
-		fname = os.path.join(args.homedir, 'MinimalResNet_')
+	if args.savename:
+		fname = os.path.join(args.homedir, args.savename)
 	else:
-		fname = os.path.join(args.homedir, 'MinimalUNet_')
+		if args.resnet:
+			fname = os.path.join(args.homedir, 'MinimalResNet_')
+		else:
+			fname = os.path.join(args.homedir, 'MinimalUNet_')
+		fname += metadata['name'] + f'_{args.mode}_lr_' + str(args.lr) + '_batchsize_' + str(args.batchsize) + '_wd_' + str(args.wd)
 
-	fname += metadata['name'] + f'_{args.mode}_lr_' + str(args.lr) + '_batchsize_' + str(args.batchsize) + '_wd_' + str(args.wd)
-
-	if subset_flag:
-		fname += '_maxsamps_' + str(args.maxsamps)
-
-	if args.conditional:
-		fname += '_conditional'
-	if args.nonorm:
-		fname += '_nonorm'
-	if args.mult != 1:
-		fname += '_mult_' + str(args.mult)
+	if not args.savename:
+		if subset_flag:
+			fname += '_maxsamps_' + str(args.maxsamps)
+		if args.conditional:
+			fname += '_conditional'
+		if args.nonorm:
+			fname += '_nonorm'
+		if args.mult != 1:
+			fname += '_mult_' + str(args.mult)
 
 	device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -83,23 +98,45 @@ def main():
 								normalization=normal,
 								lastksize=3)
 
-	model = DDIM(pretrained_backbone=backbone,
-				default_imsize=metadata['image_size'],
-				in_channels=metadata['num_channels'],
-				noise_schedule=cosine_noise_schedule)
+	start_epoch = 0
+	num_epochs = args.epochs * factor
+
+	if args.resume is not None:
+		import re
+		if not args.savename:
+			raise ValueError('--resume requires --savename')
+		if not os.path.isfile(args.resume):
+			raise FileNotFoundError(f'Resume checkpoint not found: {args.resume}')
+		model = torch.load(args.resume, map_location=device, weights_only=False)
+		m = re.search(r'_epoch(\d+)\.pt$', args.resume)
+		if not m:
+			raise ValueError(f'Could not parse epoch from resume path: {args.resume}')
+		start_epoch = int(m.group(1)) + 1  # next epoch to run
+		if args.total_epochs is None:
+			raise ValueError('--resume requires --total_epochs')
+		num_epochs = args.total_epochs - start_epoch + 1
+		if num_epochs <= 0:
+			raise ValueError(f'--total_epochs {args.total_epochs} must be > start_epoch {start_epoch - 1}')
+		print(f'Resuming from {args.resume} (epoch {start_epoch - 1}), training epochs {start_epoch}..{args.total_epochs} ({num_epochs} epochs)')
+	else:
+		model = DDIM(pretrained_backbone=backbone,
+					default_imsize=metadata['image_size'],
+					in_channels=metadata['num_channels'],
+					noise_schedule=cosine_noise_schedule)
+		model.to(device)
 
 	model.to(device)
-	
 
 	train_diffusion(model, train_loader, cosine_noise_schedule, device,
 					max_t=1000,
-					num_epochs=args.epochs*factor,
+					num_epochs=num_epochs,
+					start_epoch=start_epoch,
 					lr=args.lr,
 					in_channels=metadata['num_channels'],
 					gamma=args.gamma,
 					fname=fname,
 					conditional=args.conditional,
-					save_interval=args.saveinterval*factor,
+					save_interval=args.saveinterval * factor,
 					wd=args.wd)
 
 

@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/home/users/hshunt/convolutional_diffusion/scripts/resnet_patch_ntk.py", line 227, in <module>
+    main()
+  File "/home/users/hshunt/convolutional_diffusion/scripts/resnet_patch_ntk.py", line 146, in main
+    raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
+FileNotFoundError: Checkpoint not found: /home/users/hshunt/convolutional_diffusion/checkpoints/backbone_CElebA_ResNet_epoch0.pt

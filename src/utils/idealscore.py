@@ -11,7 +11,9 @@ from torch import nn, optim
 from torch.distributions import MultivariateNormal
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
-from torchvision import datasets, models, transforms
+from torchvision import datasets, transforms
+
+from .channel_theory import t_to_snr
 
 
 def denormalize(image, means, stds):
@@ -248,7 +250,7 @@ class LocalEquivBordersScoreModule(nn.Module):
 
 			center_exp_args = -(xnorms[:,None,k//2:-(k//2),k//2:-(k//2)] - 2*at*mpdotx + (at**2)*mpnorms[None,:,None,None])/(2*bt**2) # [b, NP, h,w]
 
-			center_vals = x[:,None:,k//2:-(k//2),k//2:-(k//2)] - at*mpcenters[None,:,:,None,None]
+			center_vals = x[:,None,:,k//2:-(k//2),k//2:-(k//2)] - at*mpcenters[None,:,:,None,None]
 
 
 			# EDGES
@@ -371,6 +373,42 @@ class LocalEquivBordersScoreModule(nn.Module):
 
 		return -numerator/denominator[:,None,:,:]/bt**2
 
+	def forward_with_posterior_stats(self, t, x, label=None, device=None, k=None):
+		"""
+		Return bbELS posterior statistics.
+
+		For boundary-broken ELS, we pair the bbELS score (self.forward) with
+		posterior statistics computed from the corresponding zero-padding local
+		model (self.local_module), which already exposes a numerically stable
+		forward_with_posterior_stats implementation.
+
+		entropy_map is in nats (natural log).
+		"""
+		if k is None:
+			k = self.kernel_size
+		if device is None:
+			device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+		x = x.to(device)
+		score = self.forward(t, x, label=label, device=device, k=k)
+		(
+			_,
+			E_x0,
+			entropy_map,
+			center_variance_map,
+			center_binder_map,
+			patch_variance_map,
+			patch_binder_map,
+		) = self.local_module.forward_with_posterior_stats(t, x, label=label, device=device, k=k)
+		return (
+			score,
+			E_x0,
+			entropy_map,
+			center_variance_map,
+			center_binder_map,
+			patch_variance_map,
+			patch_binder_map,
+		)
+
 
 class LocalEquivScoreModule(nn.Module):
 
@@ -472,6 +510,123 @@ class LocalEquivScoreModule(nn.Module):
 
 		return -numerator/denominator[:,None,:,:]/bt**2
 
+	def forward_with_posterior_stats(self, t, x, label=None, device=None, k=None):
+		"""Returns center-pixel and patch posterior stats.
+
+		Accumulates sums over training samples (not means) so denominator = Z and
+		entropy_map = ln Z - (1/Z)*sum(w_n*(ℓ_n - M)) is the discrete posterior entropy in nats,
+		0 <= entropy <= ln(N) at each pixel.
+
+		center_variance_map: at each (h,w), posterior variance of the *center pixel* of
+		the matching k×k patch. At each k the posterior is over a *different* set of
+		patches (all k×k from the training set), so center variance is not guaranteed
+		to decrease with k; it can increase if the larger-patch posterior is more
+		bimodal or puts mass on more diverse center values.
+
+		Output tuple:
+		(score, E_x0, entropy_map,
+		 center_variance_map, center_binder_map,
+		 patch_variance_map, patch_binder_map)
+		"""
+		if k is None:
+			k = self.kernel_size
+		if device is None:
+			device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+		b, c, h, w = x.shape
+		x = x.to(device)
+		bt = (self.schedule(t))**0.5
+		at = (1 - self.schedule(t))**0.5
+		bt, at = bt.to(device), at.to(device)
+		d = k // 2
+		xpadded = F.pad(x, (d, d, d, d), mode='circular')
+		xpatches = F.unfold(xpadded, k, stride=1, padding=0)
+		xnorms = torch.norm(xpatches, dim=1)**2
+		xnorms = xnorms.reshape(b, h, w)
+		numerator = torch.zeros(x.shape, device=device)
+		denominator = torch.zeros(b, h, w, device=device)
+		num_sq = torch.zeros(x.shape, device=device)
+		num_quartic = torch.zeros(x.shape, device=device)
+		patch_dim = c * k * k
+		num_patch_vec = torch.zeros(b, patch_dim, h, w, device=device)
+		num_patch_sqnorm = torch.zeros(b, h, w, device=device)
+		num_patch_sqnorm2 = torch.zeros(b, h, w, device=device)
+		sum_exp_log = torch.zeros(b, h, w, device=device)
+		subtraction = None
+		i = 0
+		for images, labels in self.trainloader:
+			i += images.shape[0]
+			if self.max_samples is not None and i > self.max_samples:
+				break
+			if label is not None:
+				images = images[(labels == label).squeeze(), :, :, :]
+			if images.shape[0] == 0:
+				continue
+			images = images.to(device)
+			bsize = images.shape[0]
+			patches = F.unfold(images, k, stride=1, padding=0)
+			# After permute(2,0,1): (L, bsize, c*k*k). Number of patches NP = L*bsize = shape[2]*shape[0] of original
+			NP = patches.shape[2] * patches.shape[0]
+			patches = patches.permute(2, 0, 1).reshape(NP, c, k, k)
+			pnorms = torch.sum(patches**2, dim=(1, 2, 3))
+			# Center of each k×k patch: index (k//2, k//2) in layout [NP, c, k, k]
+			pcenters = patches[:, :, k//2, k//2]
+			pdotx = circular_convolution_native(x, patches)
+			exp_args = -(xnorms[:, None, :, :] - 2*at*pdotx + (at**2)*pnorms[None, :, None, None]) / (2*bt**2)
+			if subtraction is None:
+				subtraction = torch.amax(exp_args, dim=(0, 1), keepdim=True)
+			else:
+				new_sub = torch.amax(exp_args, dim=(0, 1), keepdim=True)
+				delta = torch.maximum(subtraction, new_sub)
+				shift = (delta - subtraction)[:, 0, :, :]  # (1, h, w)
+				scale = torch.exp(shift)
+				z_old = denominator.clone()
+				numerator /= scale.unsqueeze(1)
+				denominator /= scale
+				num_sq /= scale.unsqueeze(1)
+				num_quartic /= scale.unsqueeze(1)
+				num_patch_vec /= scale.unsqueeze(1)
+				num_patch_sqnorm /= scale
+				num_patch_sqnorm2 /= scale
+				# A_new = (A_old - shift*Z_old)/scale; use Z_old before rescale for stability
+				sum_exp_log = (sum_exp_log - shift * z_old) / scale
+				subtraction = delta
+			exp_vals = torch.exp(exp_args - subtraction)
+			patch_vec = patches.reshape(NP, patch_dim)
+			patch_sqnorm = torch.sum(patch_vec**2, dim=1)
+			num_vals = (x[:, None, :, :, :] - at * pcenters[None, :, :, None, None])
+			# Sum over training samples so denominator = Z, entropy = log Z - (1/Z)*sum_exp_log
+			numerator += torch.sum(exp_vals[:, :, None, :, :] * num_vals, dim=1)
+			denominator += torch.sum(exp_vals, dim=1)
+			num_sq += torch.sum(exp_vals[:, :, None, :, :] * (pcenters[None, :, :, None, None]**2), dim=1)
+			num_quartic += torch.sum(exp_vals[:, :, None, :, :] * (pcenters[None, :, :, None, None]**4), dim=1)
+			num_patch_vec += torch.sum(exp_vals[:, :, None, :, :] * patch_vec[None, :, :, None, None], dim=1)
+			num_patch_sqnorm += torch.sum(exp_vals * patch_sqnorm[None, :, None, None], dim=1)
+			num_patch_sqnorm2 += torch.sum(exp_vals * (patch_sqnorm[None, :, None, None]**2), dim=1)
+			sum_exp_log += torch.sum(exp_vals * (exp_args - subtraction), dim=1)
+		denom = denominator[:, None, :, :].clamp(min=1e-8)
+		E_x0 = (x - numerator / denom) / at
+		score = -numerator / denom / bt**2
+		entropy_map = (torch.log(denominator.clamp(min=1e-8)) - sum_exp_log / denominator.clamp(min=1e-8)).clamp(min=0.0)
+		E_x0_sq = num_sq / denom
+		E_x0_quartic = num_quartic / denom
+		center_variance_map = (E_x0_sq - E_x0**2).clamp(min=0)
+		center_binder_map = 1 - E_x0_quartic / (3 * (E_x0_sq.clamp(min=1e-8)**2))
+		denom_scalar = denominator.clamp(min=1e-8)
+		E_patch_vec = num_patch_vec / denom[:, :, :, :]
+		E_patch_sqnorm = num_patch_sqnorm / denom_scalar
+		E_patch_sqnorm2 = num_patch_sqnorm2 / denom_scalar
+		patch_variance_map = (E_patch_sqnorm - torch.sum(E_patch_vec**2, dim=1)).clamp(min=0)
+		patch_binder_map = 1 - E_patch_sqnorm2 / (3 * (E_patch_sqnorm.clamp(min=1e-8)**2))
+		return (
+			score,
+			E_x0,
+			entropy_map,
+			center_variance_map,
+			center_binder_map,
+			patch_variance_map,
+			patch_binder_map,
+		)
+
 
 class LocalScoreModule(nn.Module):
 
@@ -534,11 +689,21 @@ class LocalScoreModule(nn.Module):
 			if self.max_samples is not None and i > self.max_samples:
 				break
 
-			pwise_diffs = x[:,None,:,:,:]-at*images[None,:,:,:,:] # [b, NP, c, h, w]
-			pwise_normsquares = torch.sum(pwise_diffs**2, dim=2) # [b, NP, h, w]
-			patches = F.unfold(pwise_normsquares, k, stride=1, padding=k//2) # [b, NP*k^2, h*w]
-			patches = patches.view(b, bsize, k**2, h, w) # [b, NP, k^2, h, w]
-			exp_args = -torch.sum(patches, dim=2)/(2*bt**2) # [b, NP, h, w]
+			# b = number of input images in a batch, NT = number of training images, c,h,w - standard image dimensions
+            # The index None cause pytorch to broad cast along that dimension, so this take the parwise difference between the input image and every training image.
+			pwise_diffs = x[:,None,:,:,:]-at*images[None,:,:,:,:] # [b, NT, c, h, w]
+            # take the square sum of the color channel
+			pwise_normsquares = torch.sum(pwise_diffs**2, dim=2) # [b, NT, h, w]
+            # This is the critcal step. F.unfold does not all do what you expect. See docs: https://docs.pytorch.org/docs/stable/generated/torch.nn.Unfold.html
+            # cutting to the point, the final index becomes each pixel,
+            # and the second to last index becomes pixels from training images in a k x k patch 
+            # around the pixel listed in the final index
+			patches = F.unfold(pwise_normsquares, k, stride=1, padding=k//2) # [b, NT*k^2, h*w]
+            # This command actually "folds" the trainset patches, so NT is a trainset image 
+            # and the k^2 index represents the relative pixel position to the center pixel (h,w).
+			patches = patches.view(b, bsize, k**2, h, w) # [b, NT, k^2, h, w]
+            # now we take the sum of the square difference between the patches.
+			exp_args = -torch.sum(patches, dim=2)/(2*bt**2) # [b, NT, h, w]
 
 			if subtraction is None:
 				subtraction = torch.amax(exp_args, dim=(0,1), keepdim=True)
@@ -553,8 +718,279 @@ class LocalScoreModule(nn.Module):
 			numerator += torch.mean(exp_vals[:,:,None,:,:]*pwise_diffs, dim=1)
 			denominator += torch.mean(exp_vals, dim=1)
 
-
 		return -numerator/denominator/bt**2
+
+	def forward_with_posterior_stats(self, t, x, label=None, device=None, k=None):
+		"""Returns center-pixel and patch posterior stats.
+
+		Accumulates sums over training samples (not means) so denominator = Z and
+		entropy_map = ln Z - (1/Z)*sum(w_n*(ℓ_n - M)) is the discrete posterior entropy in nats,
+		0 <= entropy <= ln(N) at each pixel.
+
+		Output tuple:
+		(score, E_x0, entropy_map,
+		 center_variance_map, center_binder_map,
+		 patch_variance_map, patch_binder_map)
+		"""
+		if k is None:
+			k = self.kernel_size
+		if device is None:
+			device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+		x = x.to(device)
+		b, c, h, w = x.shape
+		bt = (self.schedule(t))**0.5
+		at = (1 - self.schedule(t))**0.5
+		at, bt = at.to(device), bt.to(device)
+		numerator = torch.zeros(x.shape, device=device)
+		denominator = torch.zeros(b, h, w, device=device)
+		num_sq = torch.zeros(x.shape, device=device)
+		num_quartic = torch.zeros(x.shape, device=device)
+		patch_dim = c * k * k
+		num_patch_vec = torch.zeros(b, patch_dim, h, w, device=device)
+		num_patch_sqnorm = torch.zeros(b, h, w, device=device)
+		num_patch_sqnorm2 = torch.zeros(b, h, w, device=device)
+		sum_exp_log = torch.zeros(b, h, w, device=device)
+		subtraction = None
+		i = 0
+		for images, labels in self.trainloader:
+			if label is not None:
+				images = images[(labels == label).squeeze(), :, :, :]
+			if images.shape[0] == 0:
+				continue
+			images = images.to(device)
+			bsize = images.shape[0]
+			i += bsize
+			if self.max_samples is not None and i > self.max_samples:
+				break
+			pwise_diffs = x[:, None, :, :, :] - at * images[None, :, :, :, :]
+			pwise_normsquares = torch.sum(pwise_diffs**2, dim=2)
+			patches = F.unfold(pwise_normsquares, k, stride=1, padding=k//2)
+			patches = patches.view(b, bsize, k**2, h, w)
+			exp_args = -torch.sum(patches, dim=2) / (2 * bt**2)
+			if subtraction is None:
+				subtraction = torch.amax(exp_args, dim=(0, 1), keepdim=True)
+			else:
+				new_sub = torch.amax(exp_args, dim=(0, 1), keepdim=True)
+				delta = torch.maximum(subtraction, new_sub)
+				shift = (delta - subtraction)[:, 0, :, :]  # (1, h, w)
+				scale = torch.exp(shift)
+				z_old = denominator.clone()
+				numerator /= scale.unsqueeze(1)
+				denominator /= scale
+				num_sq /= scale.unsqueeze(1)
+				num_quartic /= scale.unsqueeze(1)
+				num_patch_vec /= scale.unsqueeze(1)
+				num_patch_sqnorm /= scale
+				num_patch_sqnorm2 /= scale
+				# A_new = (A_old - shift*Z_old)/scale; use Z_old before rescale for stability
+				sum_exp_log = (sum_exp_log - shift * z_old) / scale
+				subtraction = delta
+			exp_vals = torch.exp(exp_args - subtraction)
+			image_patches = F.unfold(images, k, stride=1, padding=k//2)
+			image_patches = image_patches.view(bsize, patch_dim, h, w)
+			image_patch_sqnorm = torch.sum(image_patches**2, dim=1)
+			# Sum over training samples so denominator = Z, entropy = log Z - (1/Z)*sum_exp_log
+			numerator += torch.sum(exp_vals[:, :, None, :, :] * pwise_diffs, dim=1)
+			denominator += torch.sum(exp_vals, dim=1)
+			# E[x0] = (x - num/denom)/at  so x0 = images; num = sum w_n * (x - at*images)
+			num_sq += torch.sum(exp_vals[:, :, None, :, :] * (images[None, :, :, :, :]**2), dim=1)
+			num_quartic += torch.sum(exp_vals[:, :, None, :, :] * (images[None, :, :, :, :]**4), dim=1)
+			num_patch_vec += torch.sum(exp_vals[:, :, None, :, :] * image_patches[None, :, :, :, :], dim=1)
+			num_patch_sqnorm += torch.sum(exp_vals * image_patch_sqnorm[None, :, :, :], dim=1)
+			num_patch_sqnorm2 += torch.sum(exp_vals * (image_patch_sqnorm[None, :, :, :]**2), dim=1)
+			sum_exp_log += torch.sum(exp_vals * (exp_args - subtraction), dim=1)
+		denom = denominator[:, None, :, :].clamp(min=1e-8)
+		E_x0 = (x - numerator / denom) / at
+		score = -numerator / denom / bt**2
+		entropy_map = (torch.log(denominator.clamp(min=1e-8)) - sum_exp_log / denominator.clamp(min=1e-8)).clamp(min=0.0)
+		E_x0_sq = num_sq / denom
+		E_x0_quartic = num_quartic / denom
+		center_variance_map = (E_x0_sq - E_x0**2).clamp(min=0)
+		center_binder_map = 1 - E_x0_quartic / (3 * (E_x0_sq.clamp(min=1e-8)**2))
+		denom_scalar = denominator.clamp(min=1e-8)
+		E_patch_vec = num_patch_vec / denom[:, :, :, :]
+		E_patch_sqnorm = num_patch_sqnorm / denom_scalar
+		E_patch_sqnorm2 = num_patch_sqnorm2 / denom_scalar
+		patch_variance_map = (E_patch_sqnorm - torch.sum(E_patch_vec**2, dim=1)).clamp(min=0)
+		patch_binder_map = 1 - E_patch_sqnorm2 / (3 * (E_patch_sqnorm.clamp(min=1e-8)**2))
+		return (
+			score,
+			E_x0,
+			entropy_map,
+			center_variance_map,
+			center_binder_map,
+			patch_variance_map,
+			patch_binder_map,
+		)
+
+
+def _boltzmann_weights_from_energy(energy_per_scale: np.ndarray) -> np.ndarray:
+	"""Boltzmann weights w_k = exp(-E_k) / Z from energies E_k (numpy)."""
+	emax = np.max(energy_per_scale)
+	w = np.exp(-(energy_per_scale - emax))
+	return w / (w.sum() + 1e-12)
+
+
+class AutoscalingLSModule(nn.Module):
+	"""
+	Autoscaling LS (ASLS): computes LS at all scales in k_vals, then Boltzmann-weights
+	score outputs by energy E_k = beta_scale * SNR * Var_k - S_k, where Var_k is the
+	center-pixel variance and S_k is the posterior entropy at scale k.
+	"""
+
+	def __init__(
+		self,
+		dataset,
+		k_vals=(3, 5, 7, 9, 11),
+		beta_scale=1.0,
+		image_size=32,
+		batch_size=256,
+		schedule=cosine_noise_schedule,
+		max_samples=None,
+		**kwargs,
+	):
+		super().__init__()
+		self.base = LocalScoreModule(
+			dataset,
+			kernel_size=k_vals[0],
+			image_size=image_size,
+			batch_size=batch_size,
+			schedule=schedule,
+			max_samples=max_samples,
+			**kwargs,
+		)
+		self.k_vals = list(k_vals)
+		self.beta_scale = float(beta_scale)
+		self.schedule = schedule
+
+	def forward(self, t, x, label=None, device=None, k=None):
+		# Ignore k; use autoscaling over k_vals
+		if device is None:
+			device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+		scores = []
+		energies = []
+		t_val = t[0].item() if t.numel() >= 1 else t.item()
+		snr = float(t_to_snr(t_val, self.schedule))
+		for kk in self.k_vals:
+			out = self.base.forward_with_posterior_stats(t, x, label=label, device=device, k=kk)
+			score_k = out[0]
+			entropy_map = out[2]
+			center_variance_map = out[3]
+			Var_k = center_variance_map.mean().item()
+			S_k = entropy_map.mean().item()
+			E_k = self.beta_scale * snr * Var_k - S_k
+			scores.append(score_k)
+			energies.append(E_k)
+		energies_arr = np.array(energies, dtype=np.float64)
+		weights = _boltzmann_weights_from_energy(energies_arr)
+		# Keep weighted score on same device as scores
+		weighted = sum(float(w) * s for w, s in zip(weights, scores))
+		return weighted
+
+
+class AutoscalingELSModule(nn.Module):
+	"""
+	Autoscaling ELS (ASELS): same as ASLS but wraps LocalEquivScoreModule; Boltzmann
+	weights by E_k = beta_scale * SNR * Var_k - S_k (center variance and entropy).
+	"""
+
+	def __init__(
+		self,
+		dataset,
+		k_vals=(3, 5, 7, 9, 11),
+		beta_scale=1.0,
+		image_size=32,
+		channels=3,
+		batch_size=64,
+		schedule=cosine_noise_schedule,
+		max_samples=None,
+		shuffle=False,
+		**kwargs,
+	):
+		super().__init__()
+		self.base = LocalEquivScoreModule(
+			dataset,
+			kernel_size=k_vals[0],
+			batch_size=batch_size,
+			image_size=image_size,
+			channels=channels,
+			schedule=schedule,
+			max_samples=max_samples,
+			shuffle=shuffle,
+			**kwargs,
+		)
+		self.k_vals = list(k_vals)
+		self.beta_scale = float(beta_scale)
+		self.schedule = schedule
+
+	def forward(self, t, x, label=None, device=None, k=None):
+		if device is None:
+			device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+		scores = []
+		energies = []
+		t_val = t[0].item() if t.numel() >= 1 else t.item()
+		snr = float(t_to_snr(t_val, self.schedule))
+		for kk in self.k_vals:
+			out = self.base.forward_with_posterior_stats(t, x, label=label, device=device, k=kk)
+			score_k = out[0]
+			entropy_map = out[2]
+			center_variance_map = out[3]
+			Var_k = center_variance_map.mean().item()
+			S_k = entropy_map.mean().item()
+			E_k = self.beta_scale * snr * Var_k - S_k
+			scores.append(score_k)
+			energies.append(E_k)
+		energies_arr = np.array(energies, dtype=np.float64)
+		weights = _boltzmann_weights_from_energy(energies_arr)
+		weighted = sum(float(w) * s for w, s in zip(weights, scores))
+		return weighted
+
+
+class AutoscalingBBELSModule(nn.Module):
+	"""
+	Boundary broken auto scaling ELS (bbASELS): same pattern as ASELS but wraps
+	LocalEquivBordersScoreModule (ELS with boundary zeros). Uses uniform weighting
+	over k_vals (boundary module does not expose forward_with_posterior_stats
+	for Boltzmann weighting).
+	"""
+
+	def __init__(
+		self,
+		dataset,
+		k_vals=(3, 5, 7, 9, 11),
+		image_size=32,
+		channels=3,
+		batch_size=64,
+		schedule=cosine_noise_schedule,
+		max_samples=None,
+		shuffle=False,
+		**kwargs,
+	):
+		super().__init__()
+		self.base = LocalEquivBordersScoreModule(
+			dataset,
+			kernel_size=k_vals[0],
+			batch_size=batch_size,
+			image_size=image_size,
+			channels=channels,
+			schedule=schedule,
+			max_samples=max_samples,
+			shuffle=shuffle,
+			**kwargs,
+		)
+		self.k_vals = list(k_vals)
+		self.schedule = schedule
+
+	def forward(self, t, x, label=None, device=None, k=None):
+		if device is None:
+			device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+		scores = []
+		for kk in self.k_vals:
+			score_k = self.base(t, x, label=label, device=device, k=kk)
+			scores.append(score_k)
+		# Uniform weighting (no posterior stats on border module)
+		weighted = sum(scores) / len(scores)
+		return weighted
 
 
 class IdealScoreModule(nn.Module):
