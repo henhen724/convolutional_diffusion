@@ -1,0 +1,7 @@
+# Extra pip packages for ~/diffusion_venv_py312 (use after: source ~/activate_diffusion.sh)
+# Core modules (NumPy, SciPy, PyTorch, etc.) come from Sherlock modules — see .cursorrules
+#
+# Install or refresh:
+#   source ~/activate_diffusion.sh && pip install -r requirements.txt
+
+pyvista[jupyter]>=0.43,<0.48

@@ -13,6 +13,8 @@ source ~/activate_diffusion.sh && [your_command]
 
 **Slurm (Sherlock)**: When on sherlock.stanford.edu, always use partition `sganguli` in Slurm scripts (e.g. `#SBATCH --partition=sganguli`). Do not use `normal` or `gpu` for this project.
 
+**Open OnDemand Jupyter (Sherlock)**: The batch script runs `module reset` and only loads `py-jupyter`; the `diffusion_env` kernel must not call the venv Python directly. Use the user kernelspec that runs `~/jupyter_kernel_diffusion_env.sh` (loads the same modules as `activate_diffusion.sh`, then `ipykernel`), or kernels fail with missing `libpython3.12.so.1.0`. Extra notebook pip deps (e.g. **pyvista**) install into the same venv: `source ~/activate_diffusion.sh && pip install -r requirements.txt` from the repo root on a login node; no kernelspec change is needed.
+
 **Examples:**
 ```bash
 # Run tests
@@ -45,6 +47,11 @@ source ~/activate_diffusion.sh && python scripts/els_script.py --dataset cifar10
 - Models: `backbone_DATASET_MODEL_variant.pt`
 - Scales: `scales_DATASET_MODEL_variant.pt` 
 - Results: Organized under `results/` by experiment type
+
+## Python Notebooks
+
+- **Separate processing and plotting**: When working in a Python notebook, put data processing and plotting in **separate cells** whenever the processing is likely to take more than a couple of seconds. That way plotting can be re-run (e.g. to tweak labels or styles) without re-running the heavy computation.
+- **Separate expensive computations**: Put computations that are slow or reusable (e.g. Gaussian MI, patch covariance, entropy deficits) in their **own cells**, and keep plotting in a later cell that consumes the results. For example, put the Gaussian MI calculation in one cell and the plot that uses it (along with entropy deficit curves) in another.
 
 ## Code Guidelines
 
@@ -119,7 +126,7 @@ source ~/activate_diffusion.sh && python examples/exterior_derivative_demo.py
 The project uses HPC modules + a venv overlay (`~/diffusion_venv_py312`):
 - **Modules**: python/3.12.1, py-pytorch/2.4.1_py312, py-torchvision/0.19.1_py312,
   py-scipy/1.12.0_py312, py-scikit-learn/1.5.1_py312, py-numpy/1.26.3_py312
-- **Venv (pip)**: matplotlib, tqdm, gdown, pytest, pytest-cov, coverage, ipykernel, diffusers, accelerate, safetensors, transformers, huggingface_hub, pypdf
+- **Venv (pip)**: matplotlib, tqdm, gdown, pytest, pytest-cov, coverage, ipykernel, diffusers, accelerate, safetensors, transformers, huggingface_hub, pypdf, **pyvista** (3D plots / notebooks; pulls **vtk** as a dependency — install via `pip install -r requirements.txt` after activating the venv)
 
 ## Notes
 
