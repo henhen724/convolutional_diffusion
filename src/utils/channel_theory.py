@@ -323,3 +323,55 @@ def cost_at_beta(
 ) -> np.ndarray:
     """Cost = β×⟨d⟩ − S (element-wise along k). Minimize this; higher entropy is better."""
     return beta * reg - entropy
+
+
+def find_k_at_entropy_threshold(
+    k_vals: List[int],
+    entropy_by_k: np.ndarray,
+    eps: float,
+    log_interp: bool = True,
+) -> float:
+    """
+    Interpolate the kernel size k_mem,eps at which average posterior entropy first
+    falls to eps — the memorization transition (entropy is eps away from 0).
+
+    Assumes entropy_by_k is non-increasing in k_vals (larger patches -> sharper,
+    lower-entropy posterior). log_interp interpolates log(entropy) linearly in k,
+    matching the roughly exponential decay of entropy with k; set False for plain
+    linear interpolation in entropy.
+
+    Args:
+        k_vals: Kernel sizes (any order; sorted internally).
+        entropy_by_k: Average posterior entropy for each k (same order as k_vals).
+        eps: Entropy threshold (nats) defining the memorization transition.
+        log_interp: Interpolate in log(entropy) vs k (default) or linear entropy vs k.
+
+    Returns:
+        Interpolated k_mem,eps. Returns np.inf if entropy never falls to eps within
+        the tested k_vals (transition lies beyond the largest tested k), or -np.inf
+        if entropy is already <= eps at the smallest tested k.
+    """
+    k_arr = np.asarray(k_vals, dtype=np.float64)
+    e_arr = np.asarray(entropy_by_k, dtype=np.float64)
+    order = np.argsort(k_arr)
+    k_sorted = k_arr[order]
+    e_sorted = e_arr[order]
+
+    if e_sorted[0] <= eps:
+        return -np.inf
+    if e_sorted[-1] > eps:
+        return np.inf
+
+    idx = int(np.argmax(e_sorted <= eps))
+    k_lo, k_hi = k_sorted[idx - 1], k_sorted[idx]
+    e_lo, e_hi = e_sorted[idx - 1], e_sorted[idx]
+
+    if log_interp:
+        e_lo_c = max(e_lo, 1e-300)
+        e_hi_c = max(e_hi, 1e-300)
+        eps_c = max(eps, 1e-300)
+        frac = (np.log(eps_c) - np.log(e_lo_c)) / (np.log(e_hi_c) - np.log(e_lo_c))
+    else:
+        frac = (eps - e_lo) / (e_hi - e_lo)
+    frac = min(max(float(frac), 0.0), 1.0)
+    return float(k_lo + frac * (k_hi - k_lo))

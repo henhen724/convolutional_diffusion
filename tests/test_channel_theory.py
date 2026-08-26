@@ -19,6 +19,7 @@ from src.utils.channel_theory import (
     infer_betas_for_rate_distortion,
     cost_at_beta,
     t_to_snr,
+    find_k_at_entropy_threshold,
 )
 from src.utils.data import get_dataset
 from src.utils.idealscore import LocalEquivScoreModule, LocalScoreModule
@@ -96,6 +97,31 @@ class TestChannelTheoryUtils:
             pass
         s = compute_posterior_stats_at_t(NoStats(), torch.ones(1), torch.randn(1, 1, 8, 8))
         assert s is None
+
+    def test_find_k_at_entropy_threshold_interior_log_interp(self):
+        # entropy decays as exp(-k): at k=3 -> e^-3≈0.0498, k=5 -> e^-5≈0.0067
+        k_vals = [3, 5, 7]
+        entropy = np.exp(-np.array([3.0, 5.0, 7.0]))
+        eps = np.exp(-4.0)
+        k_mem = find_k_at_entropy_threshold(k_vals, entropy, eps, log_interp=True)
+        assert abs(k_mem - 4.0) < 1e-6
+
+    def test_find_k_at_entropy_threshold_below_smallest_k(self):
+        k_vals = [3, 5, 7]
+        entropy = np.array([0.01, 0.005, 0.001])
+        assert find_k_at_entropy_threshold(k_vals, entropy, eps=0.1) == -np.inf
+
+    def test_find_k_at_entropy_threshold_beyond_largest_k(self):
+        k_vals = [3, 5, 7]
+        entropy = np.array([5.0, 4.0, 3.0])
+        assert find_k_at_entropy_threshold(k_vals, entropy, eps=0.1) == np.inf
+
+    def test_find_k_at_entropy_threshold_unsorted_k_vals(self):
+        k_vals = [7, 3, 5]
+        entropy = np.array([1.0, 5.0, 3.0])  # aligned with k_vals: k=7->1.0, k=3->5.0, k=5->3.0
+        k_mem_sorted = find_k_at_entropy_threshold([3, 5, 7], [5.0, 3.0, 1.0], eps=2.0, log_interp=False)
+        k_mem_unsorted = find_k_at_entropy_threshold(k_vals, entropy, eps=2.0, log_interp=False)
+        assert abs(k_mem_sorted - k_mem_unsorted) < 1e-9
 
     def test_els_center_variance_nonnegative_and_finite(self):
         """ELS center_variance is posterior Var(center pixel of patch); must be >= 0 and finite."""
