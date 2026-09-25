@@ -75,7 +75,16 @@ class ScheduledScoreMachine(nn.Module):
 		self.score_backbone = score_backbone
 		self.scales = scales
 
-	def forward(self, x, nsteps=None, label=None, device=None, visualize=False):
+	def forward(self, x, nsteps=None, label=None, device=None, visualize=False, t_start=1.0):
+		"""Run the reverse (denoising) process starting from noise level ``t_start``.
+
+		``x`` need not be pure noise: passing an already-corrupted-to-``t_start``
+		input (e.g. forward-diffused from a real datum) implements the
+		"corrupt to t_start, then denoise back to 0" experiment used to probe
+		which scales of structure survive forward-then-backward diffusion
+		(see ``src/utils/susceptibility.py``). ``t_start=1.0`` (default)
+		reproduces the original pure-noise-to-image behavior exactly.
+		"""
 		if device is None:
 			device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -87,7 +96,8 @@ class ScheduledScoreMachine(nn.Module):
 			else:
 				nsteps = len(self.scales)
 
-		for i in range(nsteps-1, 0, -1):
+		i_start = max(0, round(t_start * nsteps) - 1)
+		for i in range(i_start, 0, -1):
 
 			batch_size = x.shape[0]
 			t = i*torch.ones(batch_size)/nsteps
@@ -101,10 +111,10 @@ class ScheduledScoreMachine(nn.Module):
 				eps = self.backbone(t,x,device=device,k=k)
 
 			if self.score_backbone:
-				eps *= -beta_t**0.5
+				eps *= -beta_t[:,None,None,None]**0.5
 
 			if visualize:
-				imputed = (x-eps*((beta_t)**0.5))/((1 - beta_t)**0.5)
+				imputed = (x-eps*((beta_t[:,None,None,None])**0.5))/((1 - beta_t[:,None,None,None])**0.5)
 				denormalize_imshow(imputed,[0.5 for q in range(x.shape[1])], [0.5 for q in range(x.shape[1])])
 			
 			alpha_t = 1 - beta_t
@@ -491,7 +501,16 @@ class LocalEquivScoreModule(nn.Module):
 			
 			pdotx = circular_convolution_native(x, patches)
 
-			exp_args = -(xnorms[:,None,:,:] - 2*at*pdotx + (at**2)*pnorms[None,:,None,None])/(2*bt**2) # [b, NP, h,w]
+			# at/bt are per-batch-element (shape [b]); reshape before broadcasting
+			# against 4D/5D tensors below -- a bare [b] tensor broadcasts against
+			# the *last* axis by numpy/torch convention, which silently computes
+			# the wrong thing whenever b != that axis's size (b != 1 too), instead
+			# of erroring, unless b happens to equal it. Caught via a batch_size>1
+			# regression test where the batch size doesn't match any spatial dim.
+			at4 = at[:, None, None, None]
+			bt4 = bt[:, None, None, None]
+
+			exp_args = -(xnorms[:,None,:,:] - 2*at4*pdotx + (at4**2)*pnorms[None,:,None,None])/(2*bt4**2) # [b, NP, h,w]
 
 			if subtraction is None:
 				subtraction = torch.amax(exp_args, dim=(0,1), keepdim=True)
@@ -503,12 +522,17 @@ class LocalEquivScoreModule(nn.Module):
 				subtraction = delta_subtraction
 
 			exp_vals = torch.exp(exp_args - subtraction) #[b, NP, h, w]
-			num_vals = (x[:,None,:,:,:] - at*pcenters[None,:,:,None,None]) #[b,NP,c,h,w]
+			num_vals = (x[:,None,:,:,:] - at4[:,:,:,:,None]*pcenters[None,:,:,None,None]) #[b,NP,c,h,w]
 
 			numerator += torch.mean(exp_vals[:,:,None,:,:]*num_vals, dim=1)
 			denominator += torch.mean(exp_vals, dim=1)
 
-		return -numerator/denominator[:,None,:,:]/bt**2
+		# At very low noise (bt -> 0), the Gaussian kernel weights concentrate so
+		# sharply that every training patch's exp_vals can underflow to exactly 0
+		# in float32 if none is an almost-exact match (more likely with a small
+		# training set) -- clamp to avoid a silent 0/0 NaN, matching the same
+		# guard already used in forward_with_posterior_stats() above.
+		return -numerator/denominator[:,None,:,:].clamp(min=1e-8)/bt4**2
 
 	def forward_with_posterior_stats(self, t, x, label=None, device=None, k=None):
 		"""Returns center-pixel and patch posterior stats.
@@ -537,6 +561,9 @@ class LocalEquivScoreModule(nn.Module):
 		bt = (self.schedule(t))**0.5
 		at = (1 - self.schedule(t))**0.5
 		bt, at = bt.to(device), at.to(device)
+		# see the note in forward(): reshape before broadcasting against 4D/5D tensors
+		at4 = at[:, None, None, None]
+		bt4 = bt[:, None, None, None]
 		d = k // 2
 		xpadded = F.pad(x, (d, d, d, d), mode='circular')
 		xpatches = F.unfold(xpadded, k, stride=1, padding=0)
@@ -571,7 +598,7 @@ class LocalEquivScoreModule(nn.Module):
 			# Center of each k×k patch: index (k//2, k//2) in layout [NP, c, k, k]
 			pcenters = patches[:, :, k//2, k//2]
 			pdotx = circular_convolution_native(x, patches)
-			exp_args = -(xnorms[:, None, :, :] - 2*at*pdotx + (at**2)*pnorms[None, :, None, None]) / (2*bt**2)
+			exp_args = -(xnorms[:, None, :, :] - 2*at4*pdotx + (at4**2)*pnorms[None, :, None, None]) / (2*bt4**2)
 			if subtraction is None:
 				subtraction = torch.amax(exp_args, dim=(0, 1), keepdim=True)
 			else:
@@ -593,7 +620,7 @@ class LocalEquivScoreModule(nn.Module):
 			exp_vals = torch.exp(exp_args - subtraction)
 			patch_vec = patches.reshape(NP, patch_dim)
 			patch_sqnorm = torch.sum(patch_vec**2, dim=1)
-			num_vals = (x[:, None, :, :, :] - at * pcenters[None, :, :, None, None])
+			num_vals = (x[:, None, :, :, :] - at4[:, :, :, :, None] * pcenters[None, :, :, None, None])
 			# Sum over training samples so denominator = Z, entropy = log Z - (1/Z)*sum_exp_log
 			numerator += torch.sum(exp_vals[:, :, None, :, :] * num_vals, dim=1)
 			denominator += torch.sum(exp_vals, dim=1)
@@ -604,8 +631,8 @@ class LocalEquivScoreModule(nn.Module):
 			num_patch_sqnorm2 += torch.sum(exp_vals * (patch_sqnorm[None, :, None, None]**2), dim=1)
 			sum_exp_log += torch.sum(exp_vals * (exp_args - subtraction), dim=1)
 		denom = denominator[:, None, :, :].clamp(min=1e-8)
-		E_x0 = (x - numerator / denom) / at
-		score = -numerator / denom / bt**2
+		E_x0 = (x - numerator / denom) / at4
+		score = -numerator / denom / bt4**2
 		entropy_map = (torch.log(denominator.clamp(min=1e-8)) - sum_exp_log / denominator.clamp(min=1e-8)).clamp(min=0.0)
 		E_x0_sq = num_sq / denom
 		E_x0_quartic = num_quartic / denom

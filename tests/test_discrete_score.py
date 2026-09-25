@@ -118,7 +118,7 @@ class TestLocalDiscreteScoreMachine:
         xt = torch.from_numpy(images[0]).clone().unsqueeze(0)
         xt[0, 1, 1] = machine.mask_token
         xt[0, 2, 3] = machine.mask_token
-        posterior = machine(torch.tensor([0.5]), xt)
+        posterior = machine(torch.tensor([0.5]), xt, device=torch.device("cpu"))
         assert posterior.shape == (1, 4, 5, 5)
         torch.testing.assert_close(posterior.sum(dim=1), torch.ones(1, 5, 5), atol=1e-5, rtol=1e-5)
 
@@ -128,7 +128,7 @@ class TestLocalDiscreteScoreMachine:
         ds = ListGridDataset(images)
         machine = LocalDiscreteScoreMachine(ds, vocab_size=3, kernel_size=3, alpha_smooth=1.0)
         xt = torch.from_numpy(images[0]).clone().unsqueeze(0)  # fully observed
-        posterior = machine(torch.tensor([0.1]), xt)
+        posterior = machine(torch.tensor([0.1]), xt, device=torch.device("cpu"))
         expected = torch.nn.functional.one_hot(xt, num_classes=3).permute(0, 3, 1, 2).float()
         torch.testing.assert_close(posterior, expected)
 
@@ -161,7 +161,7 @@ class TestLocalDiscreteScoreMachine:
         xt[1, 2] = mask_token
         xt_t = torch.from_numpy(xt).long().unsqueeze(0)
 
-        got = machine(torch.tensor([0.4]), xt_t).numpy()
+        got = machine(torch.tensor([0.4]), xt_t, device=torch.device("cpu")).numpy()
         expected = brute_force_posterior(xt[None, :, :], mask_token, images, k, V, alpha)
         np.testing.assert_allclose(got, expected, atol=1e-5)
 
@@ -173,7 +173,7 @@ class TestLocalDiscreteScoreMachine:
         machine = LocalDiscreteScoreMachine(ds, vocab_size=V, kernel_size=k, alpha_smooth=alpha, mask_token=mask_token)
 
         xt = torch.full((1, 5, 5), mask_token, dtype=torch.long)
-        posterior = machine(torch.tensor([1.0]), xt).numpy()
+        posterior = machine(torch.tensor([1.0]), xt, device=torch.device("cpu")).numpy()
 
         expected = brute_force_posterior(xt.numpy(), mask_token, images, k, V, alpha)
         np.testing.assert_allclose(posterior, expected, atol=1e-5)
@@ -194,7 +194,7 @@ class TestLocalDiscreteScoreMachine:
         xt[1, 1] = mask_token
         xt_t = torch.from_numpy(xt).long().unsqueeze(0)
 
-        got = machine(torch.tensor([0.4]), xt_t, label=0).numpy()
+        got = machine(torch.tensor([0.4]), xt_t, label=0, device=torch.device("cpu")).numpy()
         expected = brute_force_posterior(xt[None, :, :], mask_token, [img_a], k, V, alpha)
         np.testing.assert_allclose(got, expected, atol=1e-5)
 
