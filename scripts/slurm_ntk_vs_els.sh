@@ -69,8 +69,14 @@ if [[ -n "${DRY_RUN}" ]]; then
 	N_TRAIN=16
 fi
 
-TAG="${DATASET}_${ARCH}_${SCORE_TYPE}_N${N_TRAIN}"
-FIT_FILE="${OUT_DIR}/ntk_fit_${DATASET}_${ARCH}_N${N_TRAIN}.pt"
+# Artifacts are tagged by readout. The first round of results used READOUT=center
+# and is kept alongside rather than overwritten: it is the contrast that shows why
+# the readout placement matters at all (centre-only leaves every pixel but one
+# driven by untrained theta_0 output), and notebooks/ntk_vs_els_samples.ipynb
+# refers to it directly.
+READOUT="${READOUT:-random}"
+TAG="${DATASET}_${ARCH}_${SCORE_TYPE}_N${N_TRAIN}_${READOUT}"
+FIT_FILE="${OUT_DIR}/ntk_fit_${DATASET}_${ARCH}_N${N_TRAIN}_${READOUT}.pt"
 SAMP_FILE="${OUT_DIR}/comparison_${TAG}.pt"
 
 echo "ROOT=${ROOT}"
@@ -91,6 +97,7 @@ else
 		--dataset "$DATASET" \
 		--modelfile "$MODELFILE" \
 		--n_train "$N_TRAIN" \
+		--readout "$READOUT" \
 		--grad_dtype "$GRAD_DTYPE" \
 		--out_file "$FIT_FILE" \
 		$EXTRA
