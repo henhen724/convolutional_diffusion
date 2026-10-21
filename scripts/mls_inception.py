@@ -120,6 +120,10 @@ def main():
 	p.add_argument('--method', choices=['LS', 'MLS', 'EBMLS', 'real'], default='EBMLS')
 	p.add_argument('--conditional', action='store_true')
 	p.add_argument('--scalesfile', default=None)
+	# A larger window raises IS by moving samples closer to the training set, so plain LS
+	# with its scales scaled up traces the single-layer IS-vs-memorization frontier. That is
+	# the control EBMLS has to beat: higher IS at the same nearest-neighbour distance.
+	p.add_argument('--scale_multiplier', type=float, default=1.0)
 	p.add_argument('--barrier', type=float, default=2.0)
 	p.add_argument('--barrier_mode', choices=['image', 'pixel'], default='image')
 	p.add_argument('--temperature', type=float, default=1.0)
@@ -141,6 +145,8 @@ def main():
 	conditional = args.conditional and ncls > 1
 	scales_path = args.scalesfile or str(ROOT / 'checkpoints' / DEFAULT_SCALES[args.dataset.lower()])
 	scales = [int(s) for s in torch.load(scales_path, weights_only=False)]
+	if args.scale_multiplier != 1.0:
+		scales = [min(2 * size - 1, int(round(s * args.scale_multiplier)) | 1) for s in scales]
 	print(f'dataset={args.dataset} method={args.method} conditional={conditional} scales={scales}', flush=True)
 
 	common = dict(image_size=size, batch_size=args.scorebatchsize, schedule=cosine_noise_schedule, max_samples=args.max_samples)
@@ -199,6 +205,7 @@ def main():
 		'barrier': args.barrier if args.method == 'EBMLS' else None,
 		'barrier_mode': args.barrier_mode if args.method == 'EBMLS' else None,
 		'temperature': args.temperature, 'nsamples': int(samples.shape[0]),
+		'scale_multiplier': args.scale_multiplier,
 		'IS_mean': float(isc['inception_score_mean']), 'IS_std': float(isc['inception_score_std']),
 		'nn_rms_median': None if nn_rms is None else float(nn_rms.median()),
 		'copy_fraction': None if nn_rms is None else float((nn_rms < args.copy_rms).float().mean()),
