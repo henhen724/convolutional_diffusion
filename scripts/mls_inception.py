@@ -127,6 +127,12 @@ def main():
 	# scales[i] is the window at t = i/nsteps, so the list runs low-noise -> high-noise.
 	# 'lo'/'hi' apply the multiplier to only half of it, to find which steps the gain comes from.
 	p.add_argument('--mult_half', choices=['all', 'lo', 'hi'], default='all')
+	# Widening both halves is strongly super-additive, but that does not make a uniform
+	# multiplier optimal. Setting this ramps the multiplier linearly from --scale_multiplier at
+	# t=0 to this value at t=1, so a tilted schedule can be compared against the uniform one.
+	# A ramp rather than a step at the midpoint: a step makes the window schedule
+	# non-monotonic, which would confound the tilt with a broken coarse-to-fine ordering.
+	p.add_argument('--scale_multiplier_hi', type=float, default=None)
 	p.add_argument('--barrier', type=float, default=2.0)
 	p.add_argument('--barrier_mode', choices=['image', 'pixel'], default='image')
 	p.add_argument('--temperature', type=float, default=1.0)
@@ -148,11 +154,16 @@ def main():
 	conditional = args.conditional and ncls > 1
 	scales_path = args.scalesfile or str(ROOT / 'checkpoints' / DEFAULT_SCALES[args.dataset.lower()])
 	scales = [int(s) for s in torch.load(scales_path, weights_only=False)]
-	if args.scale_multiplier != 1.0:
+	def _widen(s, m):
+		return min(2 * size - 1, int(round(s * m)) | 1)
+
+	if args.scale_multiplier_hi is not None:
+		m0, m1, n = args.scale_multiplier, args.scale_multiplier_hi, len(scales)
+		scales = [_widen(s, m0 + (m1 - m0) * i / (n - 1)) for i, s in enumerate(scales)]
+	elif args.scale_multiplier != 1.0:
 		half = len(scales) // 2
 		lo, hi = (0, len(scales)) if args.mult_half == 'all' else (0, half) if args.mult_half == 'lo' else (half, len(scales))
-		scales = [min(2 * size - 1, int(round(s * args.scale_multiplier)) | 1) if lo <= i < hi else s
-		          for i, s in enumerate(scales)]
+		scales = [_widen(s, args.scale_multiplier) if lo <= i < hi else s for i, s in enumerate(scales)]
 	print(f'dataset={args.dataset} method={args.method} conditional={conditional} scales={scales}', flush=True)
 
 	common = dict(image_size=size, batch_size=args.scorebatchsize, schedule=cosine_noise_schedule, max_samples=args.max_samples)
@@ -212,6 +223,7 @@ def main():
 		'barrier_mode': args.barrier_mode if args.method == 'EBMLS' else None,
 		'temperature': args.temperature, 'nsamples': int(samples.shape[0]),
 		'scale_multiplier': args.scale_multiplier, 'mult_half': args.mult_half,
+		'scale_multiplier_hi': args.scale_multiplier_hi,
 		'IS_mean': float(isc['inception_score_mean']), 'IS_std': float(isc['inception_score_std']),
 		'nn_rms_median': None if nn_rms is None else float(nn_rms.median()),
 		'copy_fraction': None if nn_rms is None else float((nn_rms < args.copy_rms).float().mean()),
