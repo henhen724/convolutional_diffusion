@@ -12,7 +12,9 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from src.utils.idealscore import (
+	EntropyBarrierMLSModule,
 	LocalScoreModule,
+	_box_sum,
 	MultilayerLocalScoreModule,
 	ScheduledScoreMachine,
 )
@@ -121,3 +123,72 @@ def test_label_conditioning_and_sampling_runs():
 	out = machine(torch.randn(1, 2, 8, 8), label=torch.tensor([1]), device=CPU)
 	assert out.shape == (1, 2, 8, 8)
 	assert torch.isfinite(out).all()
+
+
+@pytest.mark.parametrize("k", [1, 3, 7, 15])
+def test_box_sum_matches_unfold(k):
+	x = torch.randn(2, 3, 8, 8, dtype=torch.float64)
+	ref = F.unfold(x.reshape(6, 1, 8, 8), k, padding=k//2).sum(1).reshape(2, 3, 8, 8)
+	torch.testing.assert_close(_box_sum(x, k), ref)
+
+
+def _brute_force_entropy(x_hat, images, k, sigma2):
+	_, c, h, w = x_hat.shape
+	d = k // 2
+	xp = F.pad(x_hat[0], (d, d, d, d))
+	ip = F.pad(images, (d, d, d, d))
+	out = torch.zeros(h, w, dtype=torch.float64)
+	for r in range(h):
+		for s in range(w):
+			dist = ((ip[:, :, r:r + k, s:s + k] - xp[None, :, r:r + k, s:s + k])**2).sum(dim=(1, 2, 3))
+			p = torch.softmax(-dist / (2 * sigma2), dim=0)
+			out[r, s] = -(p * torch.log(p.clamp(min=1e-300))).sum()
+	return out[None]
+
+
+def test_barrier_deltas_and_entropy_match_brute_force():
+	ds = _dataset()
+	t = torch.full((1,), 0.4)
+	x = torch.randn(1, 2, 8, 8)
+	mod = EntropyBarrierMLSModule(ds, kernel_size=3, image_size=8, batch_size=5, schedule=cosine_noise_schedule)
+	x_hat = mod.forward_layers(t, x, device=CPU)[0]
+	bt2 = cosine_noise_schedule(t).item()
+	sigma2 = bt2 / (1 - bt2)
+	ks = [5, 9]
+	deltas, entropy = mod._expected_error_and_entropy(x_hat, ks, torch.tensor(sigma2), None, CPU)
+	for j, k in enumerate(ks):
+		torch.testing.assert_close(deltas[j].double(), _brute_force_delta(x_hat.double(), ds.tensors[0].double(), k, sigma2), rtol=1e-4, atol=1e-5)
+		torch.testing.assert_close(entropy[j].double(), _brute_force_entropy(x_hat.double(), ds.tensors[0].double(), k, sigma2), rtol=1e-3, atol=1e-4)
+
+
+@pytest.mark.parametrize("mode", ["image", "pixel"])
+def test_barrier_extremes(mode):
+	ds = _dataset()
+	t = torch.full((2,), 0.3)
+	x = torch.randn(2, 2, 8, 8)
+	ls = LocalScoreModule(ds, kernel_size=3, batch_size=4, schedule=cosine_noise_schedule)
+	# barrier above log(N): nothing passes, so the module reduces to plain LS
+	high = EntropyBarrierMLSModule(ds, kernel_size=3, entropy_barrier=10.0, barrier_mode=mode, image_size=8, batch_size=4, schedule=cosine_noise_schedule)
+	torch.testing.assert_close(high(t, x, device=CPU), ls(t, x, device=CPU), rtol=1e-4, atol=1e-4)
+	assert (high.last_k == 0).all()
+	# barrier 0: everything passes, so the largest candidate is used
+	zero = EntropyBarrierMLSModule(ds, kernel_size=3, entropy_barrier=0.0, barrier_mode=mode, image_size=8, batch_size=4, schedule=cosine_noise_schedule)
+	fixed = MultilayerLocalScoreModule(ds, kernel_sizes=(3, 15), batch_size=4, schedule=cosine_noise_schedule)
+	torch.testing.assert_close(zero(t, x, device=CPU), fixed(t, x, device=CPU), rtol=1e-4, atol=1e-4)
+	assert (zero.last_k == 15).all()
+
+
+def test_barrier_picks_largest_k_above_barrier():
+	ds = _dataset()
+	t = torch.full((1,), 0.3)
+	x = torch.randn(1, 2, 8, 8)
+	mod = EntropyBarrierMLSModule(ds, kernel_size=3, image_size=8, batch_size=4, schedule=cosine_noise_schedule)
+	x_hat = mod.forward_layers(t, x, device=CPU)[0]
+	bt2 = cosine_noise_schedule(t)[:, None, None, None]
+	ks = mod._candidates(3)
+	_, entropy = mod._expected_error_and_entropy(x_hat, ks, bt2 / (1 - bt2), None, CPU)
+	means = entropy.mean(dim=(2, 3))[:, 0]
+	mod.entropy_barrier = float(means[len(ks) // 2])  # between the extremes
+	mod.forward_layers(t, x, device=CPU)
+	expected = max(k for k, e in zip(ks, means.tolist()) if e >= mod.entropy_barrier)
+	assert int(mod.last_k[0]) == expected

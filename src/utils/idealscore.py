@@ -979,6 +979,151 @@ class MultilayerLocalScoreModule(nn.Module):
 		return (at * x_hat - x) / bt**2
 
 
+def _box_sum(x, k):
+	"""Zero-padded k x k window sums over the last two dims (same as unfold(padding=k//2).sum),
+	in O(1) per pixel via an integral image, so large windows cost the same as small ones."""
+	d = k // 2
+	h, w = x.shape[-2:]
+	xp = F.pad(x, (d + 1, d, d + 1, d))
+	ii = xp.cumsum(-2).cumsum(-1)
+	return ii[..., k:k + h, k:k + w] - ii[..., :h, k:k + w] - ii[..., k:k + h, :w] + ii[..., :h, :w]
+
+
+class EntropyBarrierMLSModule(MultilayerLocalScoreModule):
+	"""
+	Two-layer MLS whose layer-2 window is chosen at every call by a posterior
+	entropy barrier: of the candidate windows, use the largest k whose layer-2
+	posterior entropy (nats, over training images) is still >= entropy_barrier,
+	i.e. the largest length scale that stays short of collapsing onto a single
+	training image. All candidates are evaluated in one pass over the data.
+
+	barrier_mode='image' compares the per-sample mean entropy over pixels and
+	picks one k per sample; 'pixel' picks k separately at every pixel. If no
+	candidate clears the barrier, layer 2 contributes nothing there.
+
+	candidate_kernel_sizes=None uses a geometric grid of max_candidates odd
+	windows from k_1+2 up to 2*image_size-1 (the whole zero-padded image).
+	The grid is geometric rather than every odd k because cost is linear in the
+	number of candidates while entropy varies slowly with k at large k; it keeps
+	the cost independent of image size, which matters for scaling to ImageNet.
+	The chosen k is kept in self.last_k (per sample for 'image', per pixel for
+	'pixel') for logging.
+	"""
+
+	def __init__(
+		self,
+		dataset,
+		kernel_size=3,
+		entropy_barrier=1.0,
+		candidate_kernel_sizes=None,
+		max_candidates=10,
+		barrier_mode='image',
+		temperature=1.0,
+		image_size=32,
+		batch_size=256,
+		schedule=cosine_noise_schedule,
+		max_samples=None,
+		**kwargs,
+	):
+		super().__init__(
+			dataset,
+			kernel_sizes=(kernel_size,),
+			temperature=temperature,
+			image_size=image_size,
+			batch_size=batch_size,
+			schedule=schedule,
+			max_samples=max_samples,
+			**kwargs,
+		)
+		if barrier_mode not in ('image', 'pixel'):
+			raise ValueError(f"barrier_mode must be 'image' or 'pixel', got {barrier_mode!r}")
+		self.entropy_barrier = float(entropy_barrier)
+		self.candidate_kernel_sizes = None if candidate_kernel_sizes is None else sorted(candidate_kernel_sizes)
+		self.max_candidates = int(max_candidates)
+		self.barrier_mode = barrier_mode
+		self.image_size = image_size
+		self.last_k = None
+
+	def _candidates(self, k1):
+		if self.candidate_kernel_sizes is not None:
+			return [k for k in self.candidate_kernel_sizes if k > k1]
+		k_max = 2 * self.image_size - 1
+		if k1 + 2 > k_max:
+			return []
+		grid = np.geomspace(k1 + 2, k_max, self.max_candidates)
+		return sorted({int(k) | 1 for k in grid})
+
+	def _expected_error_and_entropy(self, x_hat, ks, sigma2, label, device):
+		"""For each k in ks: (delta_k [b,c,h,w], entropy_k [b,h,w]); one data pass."""
+		b, c, h, w = x_hat.shape
+		K = len(ks)
+		numerator = torch.zeros(K, b, c, h, w, device=device)
+		denominator = torch.zeros(K, b, h, w, device=device)
+		sum_exp_log = torch.zeros(K, b, h, w, device=device)
+		subtraction = None
+		i = 0
+		for images, labels in self.trainloader:
+			if label is not None:
+				images = images[(labels == label).squeeze(), :, :, :]
+			if images.shape[0] == 0:
+				continue
+			images = images.to(device)
+			bsize = images.shape[0]
+			i += bsize
+			if self.max_samples is not None and i > self.max_samples:
+				break
+			errs = images[None, :, :, :, :] - x_hat[:, None, :, :, :]  # [b, NT, c, h, w]
+			sq = torch.sum(errs**2, dim=2)  # [b, NT, h, w]
+			exp_args = torch.stack([-_box_sum(sq, k) / (2 * sigma2) for k in ks])  # [K, b, NT, h, w]
+			new_sub = torch.amax(exp_args, dim=2)  # [K, b, h, w]
+			if subtraction is None:
+				subtraction = new_sub
+			else:
+				delta = torch.maximum(subtraction, new_sub)
+				shift = delta - subtraction
+				scale = torch.exp(shift)
+				sum_exp_log = (sum_exp_log - shift * denominator) / scale
+				numerator /= scale[:, :, None]
+				denominator /= scale
+				subtraction = delta
+			rel = exp_args - subtraction[:, :, None]
+			exp_vals = torch.exp(rel)
+			numerator += torch.einsum('kbnhw,bnchw->kbchw', exp_vals, errs)
+			denominator += exp_vals.sum(dim=2)
+			sum_exp_log += (exp_vals * rel).sum(dim=2)
+		Z = denominator.clamp(min=1e-8)
+		deltas = numerator / Z[:, :, None]
+		entropy = (torch.log(Z) - sum_exp_log / Z).clamp(min=0.0)
+		return deltas, entropy
+
+	def forward_layers(self, t, x, label=None, device=None, k=None):
+		if device is None:
+			device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+		x = x.to(device)
+		k1 = self.kernel_sizes[0] if k is None else int(k)
+		bt = ((self.schedule(t))**0.5).to(device)[:, None, None, None]
+		at = ((1 - self.schedule(t))**0.5).to(device)[:, None, None, None]
+
+		score_1 = self.layer1(t, x, label=label, device=device, k=k1)
+		x_hat = (x + bt**2 * score_1) / at
+		ks = self._candidates(k1)
+		if not ks:
+			self.last_k = None
+			return [x_hat, torch.zeros_like(x_hat)]
+		deltas, entropy = self._expected_error_and_entropy(x_hat, ks, self.temperature * bt**2 / at**2, label, device)
+		if self.barrier_mode == 'image':
+			entropy = entropy.mean(dim=(2, 3), keepdim=True).expand_as(entropy)
+		ok = entropy >= self.entropy_barrier  # [K, b, h, w]
+		# entropy falls with k, but take the largest passing k even if it isn't monotone
+		idx = torch.arange(len(ks), device=device)[:, None, None, None].expand_as(ok)
+		best = torch.where(ok, idx, -1).amax(dim=0)  # [b, h, w]
+		gathered = torch.gather(deltas, 0, best.clamp(min=0)[None, :, None].expand(1, *deltas.shape[1:]))[0]
+		delta = gathered * (best >= 0)[:, None].to(gathered.dtype)
+		k_of = torch.tensor(ks, device=device)[best.clamp(min=0)] * (best >= 0)
+		self.last_k = k_of[:, 0, 0] if self.barrier_mode == 'image' else k_of
+		return [x_hat, delta]
+
+
 def _boltzmann_weights_from_energy(energy_per_scale: np.ndarray) -> np.ndarray:
 	"""Boltzmann weights w_k = exp(-E_k) / Z from energies E_k (numpy)."""
 	emax = np.max(energy_per_scale)
