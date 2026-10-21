@@ -718,7 +718,7 @@ class LocalScoreModule(nn.Module):
 
 			# b = number of input images in a batch, NT = number of training images, c,h,w - standard image dimensions
             # The index None cause pytorch to broad cast along that dimension, so this take the parwise difference between the input image and every training image.
-			pwise_diffs = x[:,None,:,:,:]-at*images[None,:,:,:,:] # [b, NT, c, h, w]
+			pwise_diffs = x[:,None,:,:,:]-at[:,None,None,None,None]*images[None,:,:,:,:] # [b, NT, c, h, w]
             # take the square sum of the color channel
 			pwise_normsquares = torch.sum(pwise_diffs**2, dim=2) # [b, NT, h, w]
             # This is the critcal step. F.unfold does not all do what you expect. See docs: https://docs.pytorch.org/docs/stable/generated/torch.nn.Unfold.html
@@ -730,12 +730,12 @@ class LocalScoreModule(nn.Module):
             # and the k^2 index represents the relative pixel position to the center pixel (h,w).
 			patches = patches.view(b, bsize, k**2, h, w) # [b, NT, k^2, h, w]
             # now we take the sum of the square difference between the patches.
-			exp_args = -torch.sum(patches, dim=2)/(2*bt**2) # [b, NT, h, w]
+			exp_args = -torch.sum(patches, dim=2)/(2*bt[:,None,None,None]**2) # [b, NT, h, w]
 
 			if subtraction is None:
-				subtraction = torch.amax(exp_args, dim=(0,1), keepdim=True)
+				subtraction = torch.amax(exp_args, dim=1, keepdim=True)
 			else:
-				new_subtraction = torch.amax(exp_args, dim=(0,1), keepdim=True)
+				new_subtraction = torch.amax(exp_args, dim=1, keepdim=True)
 				delta_subtraction = (new_subtraction>subtraction)*new_subtraction+(subtraction>=new_subtraction)*subtraction
 				numerator /= torch.exp(delta_subtraction-subtraction)
 				denominator /= torch.exp(delta_subtraction-subtraction)[:,0,:,:]
@@ -745,7 +745,7 @@ class LocalScoreModule(nn.Module):
 			numerator += torch.mean(exp_vals[:,:,None,:,:]*pwise_diffs, dim=1)
 			denominator += torch.mean(exp_vals, dim=1)
 
-		return -numerator/denominator/bt**2
+		return -numerator/denominator[:,None,:,:]/bt[:,None,None,None]**2
 
 	def forward_with_posterior_stats(self, t, x, label=None, device=None, k=None):
 		"""Returns center-pixel and patch posterior stats.
@@ -849,6 +849,134 @@ class LocalScoreModule(nn.Module):
 			patch_variance_map,
 			patch_binder_map,
 		)
+
+
+class MultilayerLocalScoreModule(nn.Module):
+	"""
+	Multilayer LS (MLS). Layer 1 is the plain LS (LocalScoreModule) at kernel
+	size k_1 acting on the noisy input x; it yields an image estimate
+	x_hat_1 = E_1[x0 | x].
+
+	Each later layer l uses a larger window k_l and sees only the previous
+	layer's estimate x_hat_{l-1} (never x). At every pixel it puts a posterior
+	over the training images from how well their k_l x k_l patch around that
+	pixel matches x_hat_{l-1}:
+
+		w_n(p) ∝ exp(-||P_p(x_hat_{l-1} - x0_n)||^2 / (2 * sigma^2))
+
+	with sigma^2 = temperature * bt^2/at^2 (the noise variance of x/at around
+	x0, i.e. the same scale layer 1 uses). The expected error of the previous
+	estimate, delta_l(p) = sum_n w_n(p) * (x0_n(p) - x_hat_{l-1}(p)), is then
+	added on: x_hat_l = x_hat_{l-1} + delta_l. The final estimate is converted
+	back to a score, (at*x_hat - x)/bt^2, the same convention LS returns.
+
+	Note that since the weights sum to 1 at each pixel, x_hat_l(p) equals the
+	layer-l posterior mean of the training images' centre pixel; the residual
+	form just makes the layer's contribution (the correction) explicit.
+	"""
+
+	def __init__(
+		self,
+		dataset,
+		kernel_sizes=(3, 7),
+		temperature=1.0,
+		image_size=32,
+		batch_size=256,
+		schedule=cosine_noise_schedule,
+		max_samples=None,
+		**kwargs,
+	):
+		super().__init__()
+		self.kernel_sizes = list(kernel_sizes)
+		if any(k2 <= k1 for k1, k2 in zip(self.kernel_sizes, self.kernel_sizes[1:])):
+			raise ValueError(f"kernel_sizes must be strictly increasing, got {self.kernel_sizes}")
+		self.layer1 = LocalScoreModule(
+			dataset,
+			kernel_size=self.kernel_sizes[0],
+			image_size=image_size,
+			batch_size=batch_size,
+			schedule=schedule,
+			max_samples=max_samples,
+			**kwargs,
+		)
+		self.dataset = dataset
+		self.trainloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+		self.temperature = float(temperature)
+		self.schedule = schedule
+		self.max_samples = max_samples
+
+	def _layer_kernel_sizes(self, k):
+		# k from a scales file sets layer 1's kernel; later layers keep their
+		# offsets relative to it. A sequence sets every layer explicitly.
+		if k is None:
+			return self.kernel_sizes
+		if isinstance(k, (list, tuple)):
+			return list(k)
+		k = int(k)
+		return [k] + [k + (kl - self.kernel_sizes[0]) for kl in self.kernel_sizes[1:]]
+
+	def _expected_error(self, x_hat, k, sigma2, label, device):
+		"""sum_n w_n(p) * (x0_n(p) - x_hat(p)), weights from k x k patch match."""
+		b, c, h, w = x_hat.shape
+		numerator = torch.zeros(x_hat.shape, device=device)
+		denominator = torch.zeros(b, 1, h, w, device=device)
+		subtraction = None
+		i = 0
+		for images, labels in self.trainloader:
+			if label is not None:
+				images = images[(labels == label).squeeze(), :, :, :]
+			if images.shape[0] == 0:
+				continue
+			images = images.to(device)
+			bsize = images.shape[0]
+			i += bsize
+			if self.max_samples is not None and i > self.max_samples:
+				break
+			errs = images[None, :, :, :, :] - x_hat[:, None, :, :, :]  # [b, NT, c, h, w]
+			sq = torch.sum(errs**2, dim=2)  # [b, NT, h, w]
+			patches = F.unfold(sq, k, stride=1, padding=k//2).view(b, bsize, k**2, h, w)
+			exp_args = -torch.sum(patches, dim=2) / (2 * sigma2)  # [b, NT, h, w]
+			new_sub = torch.amax(exp_args, dim=1, keepdim=True)  # [b, 1, h, w]
+			if subtraction is None:
+				subtraction = new_sub
+			else:
+				delta = torch.maximum(subtraction, new_sub)
+				scale = torch.exp(delta - subtraction)
+				numerator /= scale
+				denominator /= scale
+				subtraction = delta
+			exp_vals = torch.exp(exp_args - subtraction)
+			numerator += torch.sum(exp_vals[:, :, None, :, :] * errs, dim=1)
+			denominator += torch.sum(exp_vals, dim=1, keepdim=True)
+		return numerator / denominator.clamp(min=1e-8)
+
+	def forward_layers(self, t, x, label=None, device=None, k=None):
+		"""Returns the list [x_hat_1, delta_2, delta_3, ...] (x0-space tensors)."""
+		if device is None:
+			device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+		x = x.to(device)
+		ks = self._layer_kernel_sizes(k)
+		bt = ((self.schedule(t))**0.5).to(device)[:, None, None, None]
+		at = ((1 - self.schedule(t))**0.5).to(device)[:, None, None, None]
+
+		score_1 = self.layer1(t, x, label=label, device=device, k=ks[0])
+		x_hat = (x + bt**2 * score_1) / at
+		outputs = [x_hat]
+		sigma2 = self.temperature * bt**2 / at**2
+		for kl in ks[1:]:
+			delta = self._expected_error(x_hat, kl, sigma2, label, device)
+			x_hat = x_hat + delta
+			outputs.append(delta)
+		return outputs
+
+	def forward(self, t, x, label=None, device=None, k=None):
+		if device is None:
+			device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+		x = x.to(device)
+		x_hat = sum(self.forward_layers(t, x, label=label, device=device, k=k))
+		bt = ((self.schedule(t))**0.5).to(device)[:, None, None, None]
+		at = ((1 - self.schedule(t))**0.5).to(device)[:, None, None, None]
+		return (at * x_hat - x) / bt**2
 
 
 def _boltzmann_weights_from_energy(energy_per_scale: np.ndarray) -> np.ndarray:

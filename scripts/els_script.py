@@ -14,6 +14,7 @@ from src.utils.idealscore import (
     LocalEquivBordersScoreModule,
     LocalEquivScoreModule,
     LocalScoreModule,
+    MultilayerLocalScoreModule,
     ScheduledScoreMachine,
 )
 from src.utils.noise_schedules import cosine_noise_schedule
@@ -36,7 +37,7 @@ def main():
 	parser.add_argument('--expname', type=str, default=None)
 	parser.add_argument('--idealname', type=str, default='els_outputs')
 	parser.add_argument('--dataset', type=str, default='mnist')
-	parser.add_argument('--scoremoduletype', type=str, default='bbELS') # options: boundary broken ELS (bbELS), ELS, LS, and IS
+	parser.add_argument('--scoremoduletype', type=str, default='bbELS') # options: boundary broken ELS (bbELS), ELS, LS, multilayer LS (MLS), and IS
 	parser.add_argument('--conditional', action="store_true", default=False)
 	parser.add_argument('--scalesfile', type=str, default=None) # file with scales (auto-detected from checkpoints if None)
 	parser.add_argument('--scorebatchsize', type=int, default=256)
@@ -48,6 +49,8 @@ def main():
 	parser.add_argument('--cpu', action="store_true", default=False)
 	parser.add_argument('--max_samples', type=int, default=100000)
 	parser.add_argument('--shuffle', action="store_true", default=False)
+	parser.add_argument('--mls_kernel_sizes', type=int, nargs='+', default=[3, 7]) # MLS layer windows; scales file overrides layer 1, later layers keep their offset
+	parser.add_argument('--mls_temperature', type=float, default=1.0) # MLS layer-2+ posterior variance, in units of bt^2/at^2
 
 	args = parser.parse_args()
 
@@ -86,6 +89,13 @@ def main():
 					image_size=image_size,
 					batch_size=len(dataset),
 					show_plots=False,
+					schedule=schedule)
+	elif args.scoremoduletype == 'MLS': # Multilayer LS
+		mod = MultilayerLocalScoreModule(dataset,
+					kernel_sizes=args.mls_kernel_sizes,
+					temperature=args.mls_temperature,
+					image_size=image_size,
+					batch_size=args.scorebatchsize,
 					schedule=schedule)
 	elif args.scoremoduletype == 'IS': # Ideal score
 		mod = IdealScoreModule(dataset,
