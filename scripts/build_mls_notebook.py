@@ -68,10 +68,9 @@ distance to the training set"**, against plain LS with its windows scaled up as 
 CELLS.append(md('## Load every run'))
 
 CELLS.append(code(r'''
-import json, sys
+import json, subprocess, sys
 from pathlib import Path
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 import torch
 
@@ -79,28 +78,31 @@ ROOT = Path.cwd().parent if Path.cwd().name == 'notebooks' else Path.cwd()
 sys.path.insert(0, str(ROOT))
 RES = ROOT / 'results' / 'mls_inception'
 
-rows = []
+RUNS = []
 for f in sorted(RES.glob('2026-10-21*/*/metrics.json')):
     m = json.load(open(f))
-    m['run'] = f.parent.name
-    m['dir'] = str(f.parent)
-    rows.append(m)
-df = pd.DataFrame(rows)
-df['mult'] = (df['scale_multiplier'] if 'scale_multiplier' in df else np.nan)
-df['mult'] = df['mult'].fillna(1.0)
+    m['run'], m['dir'] = f.parent.name, f.parent
+    m['mult'] = m.get('scale_multiplier') or 1.0
+    m['seed'] = 1 if f.parent.name.endswith('seed1') else 0
+    m['config'] = ('real images' if m['method'] == 'real' else
+                   ('LS' if m['mult'] == 1.0 else f"LS (windows x{m['mult']:g})") if m['method'] == 'LS' else
+                   f"EBMLS barrier {m['barrier']:g}")
+    RUNS.append(m)
 
 
-def label(r):
-    if r.method == 'real':
-        return 'real images'
-    if r.method == 'LS':
-        return 'LS' if r.mult == 1.0 else f'LS (windows x{r.mult:g})'
-    return f'EBMLS barrier {r.barrier:g}'
+def sel(dataset=None, method=None, mult=None, seed=0, sort=None):
+    out = [r for r in RUNS
+           if (dataset is None or r['dataset'] == dataset)
+           and (method is None or r['method'] == method)
+           and (mult is None or r['mult'] == mult)
+           and (seed is None or r['seed'] == seed)]
+    return sorted(out, key=lambda r: r[sort] if r[sort] is not None else 0) if sort else out
 
 
-df['config'] = df.apply(label, axis=1)
-print(f'{len(df)} runs; commit:')
-!cd {ROOT} && git rev-parse --short HEAD && git status --porcelain scripts/ src/ | head
+DSETS = [d for d in ['cifar10', 'mnist', 'celeba'] if sel(dataset=d)]
+print(f'{len(RUNS)} runs over {DSETS}; commit '
+      + subprocess.run(['git', '-C', str(ROOT), 'rev-parse', '--short', 'HEAD'],
+                       capture_output=True, text=True).stdout.strip())
 '''))
 
 CELLS.append(md(r'''
@@ -113,11 +115,14 @@ the nearest training image in normalized pixel units (**higher = less like the t
 '''))
 
 CELLS.append(code(r'''
-tab = (df.sort_values(['dataset', 'method', 'mult', 'barrier'])
-         [['dataset', 'config', 'IS_mean', 'IS_std', 'nn_rms_median', 'copy_fraction', 'gen_seconds']]
-         .rename(columns={'IS_mean': 'IS', 'IS_std': '+-', 'nn_rms_median': 'NN-RMS',
-                          'copy_fraction': 'copy', 'gen_seconds': 'gen_s'}))
-tab.round({'IS': 3, '+-': 3, 'NN-RMS': 3, 'copy': 3, 'gen_s': 0}).to_string(index=False)
+ORDER = {'real': 0, 'LS': 1, 'MLS': 2, 'EBMLS': 3}
+hdr = f"{'dataset':8s} {'configuration':22s} {'seed':>4s} {'IS':>14s} {'NN-RMS':>7s} {'copy':>6s} {'gen_s':>6s}"
+print(hdr + '\n' + '-' * len(hdr))
+for r in sorted(RUNS, key=lambda r: (r['dataset'], ORDER[r['method']], r['mult'], r['barrier'] or 0, r['seed'])):
+    nn = '   —  ' if r['nn_rms_median'] is None else f"{r['nn_rms_median']:7.3f}"
+    cp = '  —  ' if r['copy_fraction'] is None else f"{r['copy_fraction']:6.3f}"
+    print(f"{r['dataset']:8s} {r['config']:22s} {r['seed']:4d} "
+          f"{r['IS_mean']:7.3f} ± {r['IS_std']:.3f} {nn} {cp} {r['gen_seconds']:6.0f}")
 '''))
 
 CELLS.append(md(r'''
@@ -128,20 +133,19 @@ pure memorization would score.
 '''))
 
 CELLS.append(code(r'''
-dsets = [d for d in ['cifar10', 'mnist', 'celeba'] if d in set(df.dataset)]
-fig, axes = plt.subplots(1, len(dsets), figsize=(5 * len(dsets), 4), squeeze=False)
-for ax, d in zip(axes[0], dsets):
-    s = df[df.dataset == d]
-    eb = s[s.method == 'EBMLS'].sort_values('barrier')
-    if len(eb):
-        ax.errorbar(eb.barrier, eb.IS_mean, yerr=eb.IS_std, marker='o', capsize=3, label='EBMLS')
-    ls = s[(s.method == 'LS') & (s.mult == 1.0)]
-    if len(ls):
-        ax.axhline(ls.IS_mean.iloc[0], ls='--', c='k', label=f'LS baseline ({ls.IS_mean.iloc[0]:.2f})')
-        ax.axhspan(*(ls.IS_mean.iloc[0] + np.array([-1, 1]) * ls.IS_std.iloc[0]), color='k', alpha=.08)
-    rl = s[s.method == 'real']
-    if len(rl):
-        ax.axhline(rl.IS_mean.iloc[0], ls=':', c='g', label=f'real images ({rl.IS_mean.iloc[0]:.2f})')
+fig, axes = plt.subplots(1, len(DSETS), figsize=(5 * len(DSETS), 4), squeeze=False)
+for ax, d in zip(axes[0], DSETS):
+    eb = sel(dataset=d, method='EBMLS', sort='barrier')
+    if eb:
+        ax.errorbar([r['barrier'] for r in eb], [r['IS_mean'] for r in eb],
+                    yerr=[r['IS_std'] for r in eb], marker='o', capsize=3, c='C3', label='EBMLS')
+    ls = sel(dataset=d, method='LS', mult=1.0)
+    if ls:
+        ax.axhline(ls[0]['IS_mean'], ls='--', c='k', label=f"LS baseline ({ls[0]['IS_mean']:.2f})")
+        ax.axhspan(*(ls[0]['IS_mean'] + np.array([-1, 1]) * ls[0]['IS_std']), color='k', alpha=.08)
+    rl = sel(dataset=d, method='real')
+    if rl:
+        ax.axhline(rl[0]['IS_mean'], ls=':', c='g', label=f"real images ({rl[0]['IS_mean']:.2f})")
     ax.set_xscale('log'); ax.set_xlabel('entropy barrier (nats)'); ax.set_ylabel('Inception Score')
     ax.set_title(d); ax.legend(fontsize=8)
 fig.tight_layout()
@@ -156,27 +160,26 @@ same x**. The LS points at several window multipliers trace that single-layer fr
 '''))
 
 CELLS.append(code(r'''
-fig, axes = plt.subplots(1, len(dsets), figsize=(5 * len(dsets), 4.2), squeeze=False)
-for ax, d in zip(axes[0], dsets):
-    s = df[(df.dataset == d) & (df.method != 'real')]
-    ls = s[s.method == 'LS'].sort_values('nn_rms_median')
-    eb = s[s.method == 'EBMLS'].sort_values('nn_rms_median')
-    if len(ls):
-        ax.plot(ls.nn_rms_median, ls.IS_mean, 'o-', c='k', label='LS (window multiplier)')
-        for _, r in ls.iterrows():
-            ax.annotate(f'x{r.mult:g}', (r.nn_rms_median, r.IS_mean), fontsize=8,
-                        xytext=(3, -10), textcoords='offset points')
-    if len(eb):
-        ax.errorbar(eb.nn_rms_median, eb.IS_mean, yerr=eb.IS_std, fmt='s-', c='C3',
-                    capsize=3, label='EBMLS (barrier)')
-        for _, r in eb.iterrows():
-            ax.annotate(f'b={r.barrier:g}', (r.nn_rms_median, r.IS_mean), fontsize=8,
-                        xytext=(3, 6), textcoords='offset points', color='C3')
-    rl = df[(df.dataset == d) & (df.method == 'real')]
-    if len(rl):
-        ax.axhline(rl.IS_mean.iloc[0], ls=':', c='g', label='real images')
-    ax.set_xlabel('median NN-RMS to training set  (right = less memorized)')
-    ax.set_ylabel('Inception Score'); ax.set_title(d); ax.legend(fontsize=8)
+fig, axes = plt.subplots(2, len(DSETS), figsize=(5 * len(DSETS), 8), squeeze=False)
+for col, d in enumerate(DSETS):
+    for row, (xkey, xlab) in enumerate([('nn_rms_median', 'median NN-RMS  (right = less memorized)'),
+                                        ('copy_fraction', 'fraction of samples that are copies')]):
+        ax = axes[row][col]
+        for meth, c, mk, lab in [('LS', 'k', 'o-', 'LS (window multiplier)'),
+                                 ('EBMLS', 'C3', 's-', 'EBMLS (barrier)')]:
+            s = sorted(sel(dataset=d, method=meth), key=lambda r: r[xkey])
+            if not s:
+                continue
+            ax.errorbar([r[xkey] for r in s], [r['IS_mean'] for r in s],
+                        yerr=[r['IS_std'] for r in s], fmt=mk, c=c, capsize=3, label=lab)
+            for r in s:
+                tag = f"x{r['mult']:g}" if meth == 'LS' else f"b={r['barrier']:g}"
+                ax.annotate(tag, (r[xkey], r['IS_mean']), fontsize=8, color=c,
+                            xytext=(4, 5), textcoords='offset points')
+        rl = sel(dataset=d, method='real')
+        if rl:
+            ax.axhline(rl[0]['IS_mean'], ls=':', c='g', label='real images (memorization ceiling)')
+        ax.set_xlabel(xlab); ax.set_ylabel('Inception Score'); ax.set_title(d); ax.legend(fontsize=8)
 fig.tight_layout()
 '''))
 
@@ -189,13 +192,12 @@ out of the entropy constraint.
 '''))
 
 CELLS.append(code(r'''
-fig, axes = plt.subplots(1, len(dsets), figsize=(5 * len(dsets), 3.6), squeeze=False)
-for ax, d in zip(axes[0], dsets):
-    for _, r in df[(df.dataset == d) & (df.method == 'EBMLS')].sort_values('barrier').iterrows():
-        kk = r.layer2_k_by_t or {}
+fig, axes = plt.subplots(1, len(DSETS), figsize=(5 * len(DSETS), 3.6), squeeze=False)
+for ax, d in zip(axes[0], DSETS):
+    for r in sel(dataset=d, method='EBMLS', sort='barrier'):
+        kk = r['layer2_k_by_t'] or {}
         if kk:
-            t = [float(x) for x in kk]
-            ax.plot(t, [kk[x] for x in kk], marker='.', label=f'barrier {r.barrier:g}')
+            ax.plot([float(x) for x in kk], list(kk.values()), marker='.', label=f"barrier {r['barrier']:g}")
     ax.set_xlabel('t (noise level)'); ax.set_ylabel('mean layer-2 window k')
     ax.set_title(d); ax.legend(fontsize=8)
 fig.tight_layout()
@@ -204,12 +206,13 @@ fig.tight_layout()
 CELLS.append(md('## Figure 4 — how close the samples get to the training set'))
 
 CELLS.append(code(r'''
-fig, axes = plt.subplots(1, len(dsets), figsize=(5 * len(dsets), 3.6), squeeze=False)
-for ax, d in zip(axes[0], dsets):
-    for _, r in df[(df.dataset == d) & (df.method != 'real')].sort_values(['method', 'barrier']).iterrows():
-        p = Path(r['dir']) / 'nn_rms.pt'
+fig, axes = plt.subplots(1, len(DSETS), figsize=(5 * len(DSETS), 3.6), squeeze=False)
+for ax, d in zip(axes[0], DSETS):
+    for r in sorted([r for r in sel(dataset=d) if r['method'] != 'real'],
+                    key=lambda r: (r['method'], r['mult'], r['barrier'] or 0)):
+        p = r['dir'] / 'nn_rms.pt'
         if p.exists():
-            ax.hist(torch.load(p).numpy(), bins=40, histtype='step', label=r.config)
+            ax.hist(torch.load(p).numpy(), bins=40, histtype='step', label=r['config'])
     ax.axvline(0.05, c='r', ls=':', label='copy threshold')
     ax.set_xlabel('NN-RMS to training set'); ax.set_ylabel('samples')
     ax.set_title(d); ax.legend(fontsize=7)
@@ -219,20 +222,21 @@ fig.tight_layout()
 CELLS.append(md('## Figure 5 — samples'))
 
 CELLS.append(code(r'''
-show = [(d, c) for d in dsets for c in ['LS', 'EBMLS']]
 picks = []
-for d in dsets:
-    s = df[df.dataset == d]
-    for m, sel in [('LS', s[(s.method == 'LS') & (s.mult == 1.0)]),
-                   ('EBMLS', s[s.method == 'EBMLS'].sort_values('IS_mean', ascending=False))]:
-        if len(sel):
-            picks.append(sel.iloc[0])
-fig, axes = plt.subplots(len(picks), 1, figsize=(12, 1.7 * len(picks)), squeeze=False)
+for d in DSETS:
+    nocopy = [r for r in sel(dataset=d, method='LS') if (r['copy_fraction'] or 0) < 0.01]
+    picks += sel(dataset=d, method='LS', mult=1.0)[:1]                                   # baseline
+    picks += sorted(nocopy, key=lambda r: -r['IS_mean'])[:1]                             # best non-copying LS
+    picks += sorted(sel(dataset=d, method='EBMLS'), key=lambda r: -r['IS_mean'])[:1]     # best EBMLS
+picks = [r for i, r in enumerate(picks) if r['dir'] not in [q['dir'] for q in picks[:i]]]
+fig, axes = plt.subplots(len(picks), 1, figsize=(12, 1.8 * len(picks)), squeeze=False)
 for ax, r in zip(axes[:, 0], picks):
-    u8 = torch.load(Path(r['dir']) / 'samples_uint8.pt')[:16]
-    grid = np.concatenate(list(u8.permute(0, 2, 3, 1).numpy()), axis=1)
-    ax.imshow(grid); ax.set_axis_off()
-    ax.set_title(f"{r.dataset} — {r.config}  (IS {r.IS_mean:.2f}, NN-RMS {r.nn_rms_median:.3f})", fontsize=9)
+    full = torch.load(r['dir'] / 'samples_uint8.pt')
+    u8 = full[torch.linspace(0, len(full) - 1, 16).long()]  # spread over classes, not the first 16
+    ax.imshow(np.concatenate(list(u8.permute(0, 2, 3, 1).numpy()), axis=1))
+    ax.set_axis_off()
+    ax.set_title(f"{r['dataset']} — {r['config']}  (IS {r['IS_mean']:.2f}, "
+                 f"NN-RMS {r['nn_rms_median']:.3f}, copies {r['copy_fraction']:.1%})", fontsize=9)
 fig.tight_layout()
 '''))
 
@@ -242,30 +246,64 @@ CELLS.append(md(r'''
 
 CELLS.append(code(r'''
 print(json.dumps({
-    'commit': '2c2dc90 (+ scale_multiplier control)',
-    'seed': 0, 'nsamples': 500, 'isc_splits': 5, 'genbatch': 50, 'scorebatchsize': 512,
+    'model_code_commit': '2c2dc90 (MLS + entropy barrier), harness 2aeebca (scale_multiplier control)',
+    'notebook_built_at': subprocess.run(['git', '-C', str(ROOT), 'rev-parse', '--short', 'HEAD'],
+                                        capture_output=True, text=True).stdout.strip(),
+    'seeds': '0 everywhere; 1 for the two CIFAR-10 repeat runs',
+    'nsamples': 500, 'isc_splits': 5, 'genbatch': '50 (20 or 10 for the large-window reruns)',
+    'scorebatchsize': '512 (128 or 64 for the large-window reruns)',
     'schedule': 'cosine', 'temperature': 1.0, 'barrier_mode': 'image',
     'cifar10': 'conditional, scales_CIFAR10_ResNet_zeros_conditional.pt, all 50k train images',
     'mnist': 'unconditional, scales_MNIST_ResNet_zeros.pt',
     'celeba': 'unconditional, --max_samples 50000, genbatch 10 / scorebatch 96 (OOM at 50/512)',
     'candidates': 'geomspace(k1+2, 2*image_size-1, 10), odd; image-size independent',
 }, indent=1))
-df[['dataset', 'config', 'nsamples', 'scales']].drop_duplicates('config').to_string(index=False)
+seen = set()
+for r in RUNS:
+    key = (r['dataset'], r['config'])
+    if key not in seen and r['method'] != 'real':
+        seen.add(key)
+        print(f"{r['dataset']:8s} {r['config']:22s} {r['scales']}")
 '''))
 
 CELLS.append(md(r'''
 ## Reading of the result
 
-Filled in from the numbers above when the control runs land. The three things to keep honest:
+**1. The multilayer layer does not pay for itself — it is dominated.** Both families walk the same
+trade-off curve toward the real-image score as they drift onto the training set, and at every
+matched memorization level plain single-layer LS is the higher of the two:
 
-- The barrier response is **non-monotonic** on CIFAR-10: barrier 1.0 is well above the LS baseline
-  while barriers 2.0 and 4.0 are well below it. A single intermediate barrier is not evidence of a
-  trend; the low end of the sweep (0.25, 0.5) is what shows whether IS keeps climbing all the way
-  into outright copying.
-- The barrier-1.0 CIFAR run sits at NN-RMS 0.139 against the baseline's 0.342. Figure 2, not the IS
-  column, is what says whether that is a better model or just a closer one.
-- MNIST differences are inside the split spread ($\pm$0.06) and come with up to 46% of samples
-  within the copy threshold. Nothing there should be called an improvement.
+| at matched copy fraction | EBMLS | LS (wider windows) |
+|---|---|---|
+| ~0% copies | barrier 1.0 → **IS 3.30** | ×2 → **IS 6.29** |
+| ~15–20% copies | barrier 0.25 → **IS 7.04** (19.6%) | ×2.5 → **IS 7.78** (14.6%) |
+
+There is no region of Figure 2 where the second layer wins. This is the answer to the question the
+sweep was built to ask, and it is negative.
+
+**2. Why it loses is structural, not a tuning failure.** Layer 2's weights sum to 1 at each pixel,
+so $\hat{x}_1 + \delta$ is exactly the layer-2 posterior mean over whole training images — layer 2
+*replaces* layer 1's estimate rather than refining it, with layer 1 surviving only through the
+weights. Widening its window therefore walks straight to "output a training image", which is why
+its memorization rises faster than its IS. Making the second layer genuinely additive (a residual
+that cannot represent a single training image on its own) is the change worth trying next.
+
+**3. The Inception Score was in the window width all along.** The scales file is far from
+IS-optimal. Uniformly scaling every per-step window by 2 takes CIFAR-10 from **IS 2.78 → 6.29 with
+zero samples inside the copy threshold**, reproduced across seeds (2.777/2.857 at ×1, 6.286/6.073
+at ×2), so the gain is ~15× the seed spread. Past ×2 it stops being free: ×2.5 copies 15% and ×3
+copies 51% while reaching IS 8.40 ≈ the real-image 8.75, which is just memorization and means
+nothing. **×2 is the usable operating point.**
+
+**4. The barrier does find a sensible schedule.** Nothing imposes one, yet the selected layer-2
+window runs from the full image at high noise down to $k=0$ (layer 2 off) at low noise (Figure 3).
+The coarse-to-fine ordering is a real finding even though the layer-2 update rule is not worth its
+cost.
+
+**Caveats.** 500 samples with 5 splits understates IS (real CIFAR-10 scores 8.75 here against ~11
+in the literature); only relative comparisons on this eval are meaningful. MNIST is uninformative
+throughout — real images score 1.915 and every configuration lands within the split spread of it.
+CelebA was still generating when this was built; its runs are in the table if present.
 '''))
 
 nb = {

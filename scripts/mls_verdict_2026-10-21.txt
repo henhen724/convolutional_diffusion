@@ -1,0 +1,32 @@
+1.  The multilayer layer does not pay for itself.
+    Both the entropy-barrier MLS and plain LS climb toward the real-image Inception
+    Score as they drift toward the training set. At every matched nearest-neighbour
+    distance, plain LS is the higher of the two, e.g.
+
+        EBMLS barrier 0.25 : IS 7.04, 19.6% of samples are copies
+        LS windows x2.5    : IS 7.78, 14.6% of samples are copies
+
+    So the second layer buys Inception Score only by memorizing, and buys it less
+    efficiently than simply widening the single-layer window. As specified, layer 2
+    replaces rather than refines: its weights sum to 1 at each pixel, so
+    x_hat_1 + delta is exactly the layer-2 posterior mean over training images, with
+    layer 1 entering only through the weights. That is what makes it collapse onto
+    training images as soon as the window is allowed to grow.
+
+2.  Window width is where the Inception Score actually was.
+    The scales file is far from the best operating point for this metric. Scaling
+    every per-step window by 2 takes CIFAR-10 from IS 2.78 to 6.29 with no sample
+    within the copy threshold of a training image. Past that it stops being free:
+    x2.5 copies 15% of samples and x3 copies 51% while reaching IS 8.40, which is
+    essentially the real-image score of 8.75 and means nothing.
+
+3.  The barrier does discover a sensible schedule.
+    Nothing imposes one, yet the selected layer-2 window runs from the full image at
+    high noise down to zero (layer 2 off, pure LS) at low noise. The coarse-to-fine
+    ordering is real; it is the layer-2 update rule that is not worth its cost.
+
+4.  Open question for the ImageNet goal.
+    Candidate windows already cost the same at any resolution (10 candidates at 32x32
+    and at 256x256, via integral-image box sums). The blocker is the per-step pass
+    over the whole training set, which still scales with N and will need a candidate
+    subset or approximate nearest-neighbour search before full-resolution ImageNet.

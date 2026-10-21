@@ -27,6 +27,7 @@ def load():
 		m = json.load(open(f))
 		m['dir'] = f.parent
 		m['mult'] = m.get('scale_multiplier') or 1.0
+		m['seed'] = 1 if f.parent.name.endswith('seed1') else 0
 		m['config'] = ('real images' if m['method'] == 'real' else
 		               ('LS' if m['mult'] == 1.0 else f"LS (windows x{m['mult']:g})") if m['method'] == 'LS' else
 		               f"EBMLS barrier {m['barrier']:g}")
@@ -55,18 +56,22 @@ def table_page(pdf, runs):
 	fig.text(.5, .94, 'Metrics', ha='center', size=18, weight='bold')
 	fig.text(.5, .89, 'NN-RMS: median distance to nearest training image — higher = less memorized',
 	         ha='center', size=11, color='.35')
-	cols = ['dataset', 'config', 'IS', 'NN-RMS', 'copy frac']
+	cols = ['dataset', 'config', 'seed', 'IS', 'NN-RMS', 'copy frac']
 	order = {'real': 0, 'LS': 1, 'MLS': 2, 'EBMLS': 3}
 	body, colours = [], []
-	for r in sorted(runs, key=lambda r: (r['dataset'], order[r['method']], r['mult'], r['barrier'] or 0)):
-		body.append([r['dataset'], r['config'], f"{r['IS_mean']:.3f} ± {r['IS_std']:.3f}",
+	for r in sorted(runs, key=lambda r: (r['dataset'], order[r['method']], r['mult'], r['barrier'] or 0,
+	                                     r['seed'])):
+		body.append([r['dataset'], r['config'], str(r['seed']), f"{r['IS_mean']:.3f} ± {r['IS_std']:.3f}",
 		             '—' if r['nn_rms_median'] is None else f"{r['nn_rms_median']:.3f}",
 		             '—' if r['copy_fraction'] is None else f"{r['copy_fraction']:.3f}"])
-		colours.append(['#eef5ff' if r['method'] == 'LS' and r['mult'] == 1.0 else
+		best = r['method'] == 'LS' and (r['copy_fraction'] or 1) < 0.01 and r['mult'] > 1
+		colours.append(['#d8f0d8' if best else
+		                '#eef5ff' if r['method'] == 'LS' and r['mult'] == 1.0 else
 		                '#f0f0f0' if r['method'] == 'real' else 'white'] * len(cols))
-	ax = fig.add_axes([.06, .05, .88, .80]); ax.set_axis_off()
+	ax = fig.add_axes([.05, .04, .90, .82]); ax.set_axis_off()
 	t = ax.table(cellText=body, colLabels=cols, cellLoc='center', loc='upper center', cellColours=colours)
-	t.auto_set_font_size(False); t.set_fontsize(10.5); t.scale(1, 1.35)
+	n = len(body) + 1
+	t.auto_set_font_size(False); t.set_fontsize(min(10.5, 220 / n)); t.scale(1, min(1.35, 26 / n))
 	pdf.savefig(fig); plt.close(fig)
 
 
@@ -129,22 +134,26 @@ def schedule_page(pdf, runs, dsets):
 
 
 def samples_page(pdf, runs, dsets):
-	picks = []
-	for d in dsets:
-		s = [r for r in runs if r['dataset'] == d]
-		ls = [r for r in s if r['method'] == 'LS' and r['mult'] == 1.0]
-		eb = sorted([r for r in s if r['method'] == 'EBMLS'], key=lambda r: -r['IS_mean'])
-		picks += ls[:1] + eb[:1]
+	d = dsets[0]
+	s = [r for r in runs if r['dataset'] == d and r['method'] != 'real']
+	nocopy = [r for r in s if r['method'] == 'LS' and r['copy_fraction'] < 0.01]
+	picks = ([r for r in s if r['method'] == 'LS' and r['mult'] == 1.0][:1]
+	         + sorted(nocopy, key=lambda r: -r['IS_mean'])[:1]
+	         + sorted([r for r in s if r['method'] == 'EBMLS'], key=lambda r: -r['IS_mean'])[:1]
+	         + sorted([r for r in s if r['method'] == 'LS'], key=lambda r: -r['copy_fraction'])[:1])
+	picks = [r for i, r in enumerate(picks) if r['dir'] not in [q['dir'] for q in picks[:i]]]
 	if not picks:
 		return
 	fig, axes = plt.subplots(len(picks), 1, figsize=FIGSIZE, squeeze=False)
-	fig.suptitle('Samples: baseline vs best barrier', weight='bold')
+	fig.suptitle(f'{d} samples: baseline, best non-copying, best EBMLS, and the memorizing end',
+	             weight='bold')
 	for ax, r in zip(axes[:, 0], picks):
-		u8 = torch.load(r['dir'] / 'samples_uint8.pt')[:14]
+		full = torch.load(r['dir'] / 'samples_uint8.pt')
+		u8 = full[torch.linspace(0, len(full) - 1, 14).long()]  # spread over classes, not the first 14
 		ax.imshow(np.concatenate(list(u8.permute(0, 2, 3, 1).numpy()), axis=1), rasterized=True)
 		ax.set_axis_off()
-		ax.set_title(f"{r['dataset']} — {r['config']}  (IS {r['IS_mean']:.2f}, NN-RMS {r['nn_rms_median']:.3f})",
-		             fontsize=10)
+		ax.set_title(f"{r['config']}  —  IS {r['IS_mean']:.2f},  NN-RMS {r['nn_rms_median']:.3f},  "
+		             f"copies {r['copy_fraction']:.1%}", fontsize=11)
 	fig.tight_layout(); pdf.savefig(fig, dpi=150); plt.close(fig)
 
 
@@ -160,7 +169,18 @@ def main():
 	p.add_argument('--out', required=True)
 	p.add_argument('--headline', required=True)
 	p.add_argument('--verdict', required=True, help='path to a text file with the closing slide')
+	p.add_argument('--png_dir', default=None, help='also dump each page as a PNG, to eyeball the layout')
 	args = p.parse_args()
+	if args.png_dir:
+		Path(args.png_dir).mkdir(parents=True, exist_ok=True)
+		_orig, _n = PdfPages.savefig, [0]
+
+		def savefig(self, figure=None, **kw):
+			_n[0] += 1
+			(figure or plt.gcf()).savefig(f'{args.png_dir}/page{_n[0]}.png', dpi=70)
+			return _orig(self, figure, **kw)
+
+		PdfPages.savefig = savefig
 	runs = load()
 	dsets = [d for d in ['cifar10', 'mnist', 'celeba'] if any(r['dataset'] == d for r in runs)]
 	Path(args.out).parent.mkdir(parents=True, exist_ok=True)
