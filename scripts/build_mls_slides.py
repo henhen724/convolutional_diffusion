@@ -6,6 +6,8 @@
 
 import argparse
 import json
+import subprocess
+from datetime import date
 from pathlib import Path
 
 import matplotlib
@@ -21,18 +23,36 @@ FIGSIZE = (11, 6.2)
 plt.rcParams.update({'font.size': 13, 'axes.titlesize': 15, 'axes.labelsize': 13})
 
 
+def _commit():
+	try:
+		# cwd=, not `git -C`: the stock Sherlock git is 1.8.3.1 and has no -C.
+		return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'],
+		                               cwd=str(ROOT), stderr=subprocess.DEVNULL).decode().strip()
+	except Exception:
+		return 'unknown'
+
+
 def load():
 	runs = []
-	for f in sorted(RES.glob('2026-10-21*/*/metrics.json')):
+	for f in sorted(RES.glob('2026-10-2*/*/metrics.json')):
 		m = json.load(open(f))
 		m['dir'] = f.parent
 		m['mult'] = m.get('scale_multiplier') or 1.0
 		m['seed'] = 1 if f.parent.name.endswith('seed1') else 0
+		m['half'] = m.get('mult_half') or 'all'
+		h = '' if m['half'] == 'all' else f", {m['half']}-noise half"
 		m['config'] = ('real images' if m['method'] == 'real' else
-		               ('LS' if m['mult'] == 1.0 else f"LS (windows x{m['mult']:g})") if m['method'] == 'LS' else
+		               ('LS' if m['mult'] == 1.0 else f"LS (windows x{m['mult']:g}{h})") if m['method'] == 'LS' else
 		               f"EBMLS barrier {m['barrier']:g}")
 		runs.append(m)
 	return runs
+
+
+def curve(runs, dataset, method):
+	"""Full-trajectory runs only, so the split-half runs stay off the frontier curves."""
+	return sorted([r for r in runs if r['dataset'] == dataset and r['method'] == method
+	               and r['half'] == 'all' and r['seed'] == 0],
+	              key=lambda r: r['nn_rms_median'] if r['nn_rms_median'] is not None else 0)
 
 
 def title_page(pdf, runs, headline):
@@ -46,7 +66,8 @@ def title_page(pdf, runs, headline):
 	         'Layer 2 sees only layer 1\'s estimate, forms a posterior over all training images in a\n'
 	         'larger window, and adds the expected error of that estimate. The window at each step is the\n'
 	         'largest whose posterior entropy is still above a barrier — i.e. has not collapsed onto one image.\n\n'
-	         '2026-10-21 · commit 2c2dc90 · seed 0 · 500 samples/config · IS over 5 splits',
+	         f'{date.today()} · commit {_commit()} · seed 0 · 500 samples/config · IS over 5 splits · '
+	         'FID vs the full training set',
 	         ha='center', size=11.5, color='.25', linespacing=1.7)
 	pdf.savefig(fig); plt.close(fig)
 
@@ -54,17 +75,19 @@ def title_page(pdf, runs, headline):
 def table_page(pdf, runs):
 	fig = plt.figure(figsize=FIGSIZE)
 	fig.text(.5, .94, 'Metrics', ha='center', size=18, weight='bold')
-	fig.text(.5, .89, 'NN-RMS: median distance to nearest training image — higher = less memorized',
+	fig.text(.5, .89, 'IS higher is better, FID lower is better; NN-RMS higher = less memorized',
 	         ha='center', size=11, color='.35')
-	cols = ['dataset', 'config', 'seed', 'IS', 'NN-RMS', 'copy frac']
+	cols = ['dataset', 'config', 'seed', 'IS', 'FID', 'NN-RMS', 'copy frac']
 	order = {'real': 0, 'LS': 1, 'MLS': 2, 'EBMLS': 3}
 	body, colours = [], []
 	for r in sorted(runs, key=lambda r: (r['dataset'], order[r['method']], r['mult'], r['barrier'] or 0,
-	                                     r['seed'])):
+	                                     r['half'], r['seed'])):
 		body.append([r['dataset'], r['config'], str(r['seed']), f"{r['IS_mean']:.3f} ± {r['IS_std']:.3f}",
+		             '—' if r.get('FID') is None else f"{r['FID']:.1f}",
 		             '—' if r['nn_rms_median'] is None else f"{r['nn_rms_median']:.3f}",
 		             '—' if r['copy_fraction'] is None else f"{r['copy_fraction']:.3f}"])
-		best = r['method'] == 'LS' and (r['copy_fraction'] or 1) < 0.01 and r['mult'] > 1
+		best = (r['method'] == 'LS' and (r['copy_fraction'] or 1) < 0.01 and r['mult'] > 1
+		        and r['half'] == 'all')
 		colours.append(['#d8f0d8' if best else
 		                '#eef5ff' if r['method'] == 'LS' and r['mult'] == 1.0 else
 		                '#f0f0f0' if r['method'] == 'real' else 'white'] * len(cols))
@@ -96,26 +119,51 @@ def barrier_page(pdf, runs, dsets):
 	fig.tight_layout(); pdf.savefig(fig); plt.close(fig)
 
 
-def frontier_page(pdf, runs, dsets):
+def frontier_page(pdf, runs, dsets, ykey, ylab, title):
 	fig, axes = plt.subplots(1, len(dsets), figsize=FIGSIZE, squeeze=False)
-	fig.suptitle('The test that counts: IS at matched distance to the training set', weight='bold')
+	fig.suptitle(title, weight='bold')
 	for ax, d in zip(axes[0], dsets):
-		s = [r for r in runs if r['dataset'] == d and r['method'] != 'real']
 		for meth, c, mk, lab in [('LS', 'k', 'o-', 'LS (window multiplier)'),
 		                         ('EBMLS', 'C3', 's-', 'EBMLS (barrier)')]:
-			sel = sorted([r for r in s if r['method'] == meth], key=lambda r: r['nn_rms_median'])
-			if not sel:
+			s = [r for r in curve(runs, d, meth) if r.get(ykey) is not None]
+			if not s:
 				continue
-			ax.plot([r['nn_rms_median'] for r in sel], [r['IS_mean'] for r in sel], mk, c=c, label=lab)
-			for r in sel:
+			ax.plot([r['nn_rms_median'] for r in s], [r[ykey] for r in s], mk, c=c, label=lab)
+			for r in s:
 				tag = f"x{r['mult']:g}" if meth == 'LS' else f"b={r['barrier']:g}"
-				ax.annotate(tag, (r['nn_rms_median'], r['IS_mean']), fontsize=9, color=c,
+				ax.annotate(tag, (r['nn_rms_median'], r[ykey]), fontsize=9, color=c,
 				            xytext=(4, 5), textcoords='offset points')
 		rl = [r for r in runs if r['dataset'] == d and r['method'] == 'real']
-		if rl:
-			ax.axhline(rl[0]['IS_mean'], ls=':', c='g', label='real images')
+		if rl and rl[0].get(ykey) is not None:
+			ax.axhline(rl[0][ykey], ls=':', c='g', label='real images')
 		ax.set_xlabel('NN-RMS  (right = less memorized)'); ax.set_title(d); ax.legend(fontsize=9)
-	axes[0][0].set_ylabel('Inception Score')
+	axes[0][0].set_ylabel(ylab)
+	fig.tight_layout(); pdf.savefig(fig); plt.close(fig)
+
+
+def superadd_page(pdf, runs):
+	split = [r for r in runs if r['half'] != 'all']
+	base = [r for r in runs if r['dataset'] == 'cifar10' and r['method'] == 'LS' and r['mult'] == 1.0
+	        and r['half'] == 'all' and r['seed'] == 0]
+	full = [r for r in runs if r['dataset'] == 'cifar10' and r['method'] == 'LS' and r['mult'] == 2.0
+	        and r['half'] == 'all' and r['seed'] == 0]
+	if not (split and base and full):
+		return
+	vals = base + sorted(split, key=lambda r: r['half']) + full
+	labels = ['baseline (x1)'] + [f"x2 on {r['half']}-noise half" for r in sorted(split, key=lambda r: r['half'])] \
+	         + ['x2 everywhere']
+	fig, axes = plt.subplots(1, 2, figsize=FIGSIZE)
+	fig.suptitle('Widening half the schedule barely helps; widening all of it helps a lot',
+	             weight='bold')
+	for ax, (key, lab) in zip(axes, [('IS_mean', 'Inception Score  (higher better)'),
+	                                 ('FID', 'FID  (lower better)')]):
+		y = [r.get(key) for r in vals]
+		if any(v is None for v in y):
+			ax.set_axis_off(); continue
+		ax.bar(range(len(y)), y, color=['.6'] + ['C0'] * len(split) + ['C2'])
+		ax.axhline(y[0], ls='--', c='k', lw=1)
+		ax.set_xticks(range(len(y))); ax.set_xticklabels(labels, rotation=18, ha='right', fontsize=9)
+		ax.set_ylabel(lab)
 	fig.tight_layout(); pdf.savefig(fig); plt.close(fig)
 
 
@@ -188,7 +236,11 @@ def main():
 		title_page(pdf, runs, args.headline)
 		table_page(pdf, runs)
 		barrier_page(pdf, runs, dsets)
-		frontier_page(pdf, runs, dsets)
+		frontier_page(pdf, runs, dsets, 'IS_mean', 'Inception Score  (higher better)',
+		              'The test that counts: IS at matched distance to the training set')
+		frontier_page(pdf, runs, dsets, 'FID', 'FID  (lower better)',
+		              'Same frontier under FID — the metric that still works on CelebA and MNIST')
+		superadd_page(pdf, runs)
 		schedule_page(pdf, runs, dsets)
 		samples_page(pdf, runs, dsets)
 		verdict_page(pdf, Path(args.verdict).read_text())

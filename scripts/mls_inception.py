@@ -124,6 +124,9 @@ def main():
 	# with its scales scaled up traces the single-layer IS-vs-memorization frontier. That is
 	# the control EBMLS has to beat: higher IS at the same nearest-neighbour distance.
 	p.add_argument('--scale_multiplier', type=float, default=1.0)
+	# scales[i] is the window at t = i/nsteps, so the list runs low-noise -> high-noise.
+	# 'lo'/'hi' apply the multiplier to only half of it, to find which steps the gain comes from.
+	p.add_argument('--mult_half', choices=['all', 'lo', 'hi'], default='all')
 	p.add_argument('--barrier', type=float, default=2.0)
 	p.add_argument('--barrier_mode', choices=['image', 'pixel'], default='image')
 	p.add_argument('--temperature', type=float, default=1.0)
@@ -146,7 +149,10 @@ def main():
 	scales_path = args.scalesfile or str(ROOT / 'checkpoints' / DEFAULT_SCALES[args.dataset.lower()])
 	scales = [int(s) for s in torch.load(scales_path, weights_only=False)]
 	if args.scale_multiplier != 1.0:
-		scales = [min(2 * size - 1, int(round(s * args.scale_multiplier)) | 1) for s in scales]
+		half = len(scales) // 2
+		lo, hi = (0, len(scales)) if args.mult_half == 'all' else (0, half) if args.mult_half == 'lo' else (half, len(scales))
+		scales = [min(2 * size - 1, int(round(s * args.scale_multiplier)) | 1) if lo <= i < hi else s
+		          for i, s in enumerate(scales)]
 	print(f'dataset={args.dataset} method={args.method} conditional={conditional} scales={scales}', flush=True)
 
 	common = dict(image_size=size, batch_size=args.scorebatchsize, schedule=cosine_noise_schedule, max_samples=args.max_samples)
@@ -205,7 +211,7 @@ def main():
 		'barrier': args.barrier if args.method == 'EBMLS' else None,
 		'barrier_mode': args.barrier_mode if args.method == 'EBMLS' else None,
 		'temperature': args.temperature, 'nsamples': int(samples.shape[0]),
-		'scale_multiplier': args.scale_multiplier,
+		'scale_multiplier': args.scale_multiplier, 'mult_half': args.mult_half,
 		'IS_mean': float(isc['inception_score_mean']), 'IS_std': float(isc['inception_score_std']),
 		'nn_rms_median': None if nn_rms is None else float(nn_rms.median()),
 		'copy_fraction': None if nn_rms is None else float((nn_rms < args.copy_rms).float().mean()),

@@ -63,6 +63,12 @@ model that copies the training set wins. Every run therefore also reports the me
 from each sample to its nearest training image (same class when conditional), and the fraction of
 samples within 0.05 RMS of one. **The claim to test is not "higher IS" but "higher IS at matched
 distance to the training set"**, against plain LS with its windows scaled up as the control.
+
+Each run additionally reports **FID and KID**, added after the fact from the saved samples
+(`scripts/add_fid.py`). This matters more than it sounds: IS has almost no dynamic range on CelebA
+(real images score 3.31) or MNIST (1.92), because an ImageNet classifier has nothing to say about
+faces or digits, so "no IS change" on those datasets is unreadable. FID compares feature
+*distributions* against the real data and stays informative. It changed a conclusion — see below.
 '''))
 
 CELLS.append(md('## Load every run'))
@@ -79,23 +85,26 @@ sys.path.insert(0, str(ROOT))
 RES = ROOT / 'results' / 'mls_inception'
 
 RUNS = []
-for f in sorted(RES.glob('2026-10-21*/*/metrics.json')):
+for f in sorted(RES.glob('2026-10-2*/*/metrics.json')):
     m = json.load(open(f))
     m['run'], m['dir'] = f.parent.name, f.parent
     m['mult'] = m.get('scale_multiplier') or 1.0
     m['seed'] = 1 if f.parent.name.endswith('seed1') else 0
+    half = '' if m.get('mult_half', 'all') in (None, 'all') else f", {m['mult_half']}-noise half only"
     m['config'] = ('real images' if m['method'] == 'real' else
-                   ('LS' if m['mult'] == 1.0 else f"LS (windows x{m['mult']:g})") if m['method'] == 'LS' else
+                   ('LS' if m['mult'] == 1.0 else f"LS (windows x{m['mult']:g}{half})") if m['method'] == 'LS' else
                    f"EBMLS barrier {m['barrier']:g}")
     RUNS.append(m)
 
 
-def sel(dataset=None, method=None, mult=None, seed=0, sort=None):
+def sel(dataset=None, method=None, mult=None, seed=0, half='all', sort=None):
+    """half='all' keeps only the full-trajectory runs, so the split-half runs stay off the curves."""
     out = [r for r in RUNS
            if (dataset is None or r['dataset'] == dataset)
            and (method is None or r['method'] == method)
            and (mult is None or r['mult'] == mult)
-           and (seed is None or r['seed'] == seed)]
+           and (seed is None or r['seed'] == seed)
+           and (half is None or (r.get('mult_half') or 'all') == half)]
     return sorted(out, key=lambda r: r[sort] if r[sort] is not None else 0) if sort else out
 
 
@@ -116,13 +125,16 @@ the nearest training image in normalized pixel units (**higher = less like the t
 
 CELLS.append(code(r'''
 ORDER = {'real': 0, 'LS': 1, 'MLS': 2, 'EBMLS': 3}
-hdr = f"{'dataset':8s} {'configuration':22s} {'seed':>4s} {'IS':>14s} {'NN-RMS':>7s} {'copy':>6s} {'gen_s':>6s}"
+hdr = (f"{'dataset':8s} {'configuration':24s} {'seed':>4s} {'IS ↑':>14s} {'FID ↓':>7s} "
+       f"{'KID ↓':>7s} {'NN-RMS':>7s} {'copy':>6s}")
 print(hdr + '\n' + '-' * len(hdr))
 for r in sorted(RUNS, key=lambda r: (r['dataset'], ORDER[r['method']], r['mult'], r['barrier'] or 0, r['seed'])):
     nn = '   —  ' if r['nn_rms_median'] is None else f"{r['nn_rms_median']:7.3f}"
     cp = '  —  ' if r['copy_fraction'] is None else f"{r['copy_fraction']:6.3f}"
-    print(f"{r['dataset']:8s} {r['config']:22s} {r['seed']:4d} "
-          f"{r['IS_mean']:7.3f} ± {r['IS_std']:.3f} {nn} {cp} {r['gen_seconds']:6.0f}")
+    fid = '   —  ' if r.get('FID') is None else f"{r['FID']:7.2f}"
+    kid = '   —  ' if r.get('KID_mean') is None else f"{r['KID_mean']:7.4f}"
+    print(f"{r['dataset']:8s} {r['config']:24s} {r['seed']:4d} "
+          f"{r['IS_mean']:7.3f} ± {r['IS_std']:.3f} {fid} {kid} {nn} {cp}")
 '''))
 
 CELLS.append(md(r'''
@@ -162,25 +174,62 @@ same x**. The LS points at several window multipliers trace that single-layer fr
 CELLS.append(code(r'''
 fig, axes = plt.subplots(2, len(DSETS), figsize=(5 * len(DSETS), 8), squeeze=False)
 for col, d in enumerate(DSETS):
-    for row, (xkey, xlab) in enumerate([('nn_rms_median', 'median NN-RMS  (right = less memorized)'),
-                                        ('copy_fraction', 'fraction of samples that are copies')]):
+    for row, (ykey, ylab) in enumerate([('IS_mean', 'Inception Score  (higher better)'),
+                                        ('FID', 'FID  (lower better)')]):
         ax = axes[row][col]
         for meth, c, mk, lab in [('LS', 'k', 'o-', 'LS (window multiplier)'),
                                  ('EBMLS', 'C3', 's-', 'EBMLS (barrier)')]:
-            s = sorted(sel(dataset=d, method=meth), key=lambda r: r[xkey])
+            s = [r for r in sorted(sel(dataset=d, method=meth), key=lambda r: r['nn_rms_median'])
+                 if r.get(ykey) is not None]
             if not s:
                 continue
-            ax.errorbar([r[xkey] for r in s], [r['IS_mean'] for r in s],
-                        yerr=[r['IS_std'] for r in s], fmt=mk, c=c, capsize=3, label=lab)
+            ax.plot([r['nn_rms_median'] for r in s], [r[ykey] for r in s], mk, c=c, label=lab)
             for r in s:
                 tag = f"x{r['mult']:g}" if meth == 'LS' else f"b={r['barrier']:g}"
-                ax.annotate(tag, (r[xkey], r['IS_mean']), fontsize=8, color=c,
+                ax.annotate(tag, (r['nn_rms_median'], r[ykey]), fontsize=8, color=c,
                             xytext=(4, 5), textcoords='offset points')
         rl = sel(dataset=d, method='real')
-        if rl:
-            ax.axhline(rl[0]['IS_mean'], ls=':', c='g', label='real images (memorization ceiling)')
-        ax.set_xlabel(xlab); ax.set_ylabel('Inception Score'); ax.set_title(d); ax.legend(fontsize=8)
+        if rl and rl[0].get(ykey) is not None:
+            ax.axhline(rl[0][ykey], ls=':', c='g', label='real images (ceiling / floor)')
+        ax.set_xlabel('median NN-RMS  (right = less memorized)')
+        ax.set_ylabel(ylab); ax.set_title(d); ax.legend(fontsize=8)
 fig.tight_layout()
+'''))
+
+CELLS.append(md(r'''
+## Figure 2b — which denoising steps does the window-width gain come from?
+
+`scales[i]` is the window at $t=i/\mathrm{nsteps}$, so the list runs low-noise → high-noise.
+These runs apply the ×2 multiplier to only half of it, leaving the other half at baseline.
+'''))
+
+CELLS.append(code(r'''
+split = [r for r in RUNS if (r.get('mult_half') or 'all') != 'all']
+base = sel(dataset='cifar10', method='LS', mult=1.0)
+full = sel(dataset='cifar10', method='LS', mult=2.0)
+if split:
+    labels, vals = [], []
+    for r in [base[0]] + sorted(split, key=lambda r: r['mult_half']) + [full[0]]:
+        labels.append({'all': 'x2 everywhere'}.get(r.get('mult_half') or 'all', '')
+                      or (f"x2 on {r['mult_half']}-noise half" if r['mult'] > 1 else 'baseline (x1)'))
+        vals.append(r)
+    labels[0], labels[-1] = 'baseline (x1)', 'x2 everywhere'
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+    for ax, (key, lab) in zip(axes, [('IS_mean', 'Inception Score ↑'), ('FID', 'FID ↓')]):
+        y = [r.get(key) for r in vals]
+        if any(v is None for v in y):
+            ax.set_title(f'{lab} — not yet computed'); continue
+        ax.bar(range(len(y)), y, color=['.6', 'C0', 'C0', 'C2'])
+        ax.axhline(y[0], ls='--', c='k', lw=1)
+        ax.set_xticks(range(len(y))); ax.set_xticklabels(labels, rotation=20, ha='right', fontsize=8)
+        ax.set_ylabel(lab)
+    fig.suptitle('The two halves are strongly super-additive', fontweight='bold')
+    fig.tight_layout()
+    for lab, r in zip(labels, vals):
+        print(f"{lab:28s} IS {r['IS_mean']:6.3f}   FID {r.get('FID') or float('nan'):7.2f}   "
+              f"copies {r['copy_fraction']:.3f}")
+else:
+    print('no split-half runs found')
 '''))
 
 CELLS.append(md(r'''
@@ -269,17 +318,20 @@ for r in RUNS:
 CELLS.append(md(r'''
 ## Reading of the result
 
-**1. The multilayer layer does not pay for itself — it is dominated.** Both families walk the same
-trade-off curve toward the real-image score as they drift onto the training set, and at every
-matched memorization level plain single-layer LS is the higher of the two:
+**1. The multilayer layer does not pay for itself — it is dominated on both metrics.** Both
+families walk the same trade-off curve toward the real data as they drift onto the training set,
+and at every matched memorization level plain single-layer LS is better:
 
 | at matched copy fraction | EBMLS | LS (wider windows) |
 |---|---|---|
-| ~0% copies | barrier 1.0 → **IS 3.30** | ×2 → **IS 6.29** |
-| ~15–20% copies | barrier 0.25 → **IS 7.04** (19.6%) | ×2.5 → **IS 7.78** (14.6%) |
+| ~0% copies | barrier 1.0 → IS 3.30, **FID 200.7** | ×2 → IS 6.29, **FID 94.0** |
+| ~15–20% copies | barrier 0.25 → IS 7.04 (19.6%), **FID 97.9** | ×2.5 → IS 7.78 (14.6%), **FID 67.8** |
 
-There is no region of Figure 2 where the second layer wins. This is the answer to the question the
-sweep was built to ask, and it is negative.
+FID makes the verdict sharper than IS did. EBMLS at barrier 1.0 *beat* the LS baseline on IS
+(3.30 vs 2.78) but is **worse than it on FID** (200.7 vs 188.7) — that apparent gain was IS
+rewarding proximity to the training set, not better samples. And LS ×2, which copies nothing at
+all, has a better FID (94.0) than the most memorizing EBMLS setting (97.9 at 19.6% copies).
+There is no region of Figure 2 where the second layer wins.
 
 **2. Why it loses is structural, not a tuning failure.** Layer 2's weights sum to 1 at each pixel,
 so $\hat{x}_1 + \delta$ is exactly the layer-2 posterior mean over whole training images — layer 2
@@ -288,22 +340,41 @@ weights. Widening its window therefore walks straight to "output a training imag
 its memorization rises faster than its IS. Making the second layer genuinely additive (a residual
 that cannot represent a single training image on its own) is the change worth trying next.
 
-**3. The Inception Score was in the window width all along.** The scales file is far from
-IS-optimal. Uniformly scaling every per-step window by 2 takes CIFAR-10 from **IS 2.78 → 6.29 with
-zero samples inside the copy threshold**, reproduced across seeds (2.777/2.857 at ×1, 6.286/6.073
-at ×2), so the gain is ~15× the seed spread. Past ×2 it stops being free: ×2.5 copies 15% and ×3
-copies 51% while reaching IS 8.40 ≈ the real-image 8.75, which is just memorization and means
-nothing. **×2 is the usable operating point.**
+**3. The real win is window width, and it generalizes.** The scales file is far from optimal.
+Uniformly scaling every per-step window by 2 gives, with **zero samples inside the copy
+threshold**:
 
-**4. The barrier does find a sensible schedule.** Nothing imposes one, yet the selected layer-2
+| | baseline → ×2 (IS) | baseline → ×2 (FID) |
+|---|---|---|
+| CIFAR-10 | 2.78 → **6.29** | 188.7 → **94.0** |
+| CelebA | 2.39 → 2.34 (flat) | 128.3 → **79.4** |
+| MNIST | 1.86 → 1.92 | 19.0 → 17.0 |
+
+CIFAR-10 is reproduced across seeds (IS 2.777/2.857 at ×1, 6.286/6.073 at ×2; FID 188.7/190.4 and
+94.0/93.0), so the gain is many times the seed spread. **CelebA is the case that needed FID:** its
+IS is flat, which looked like a failure to generalize, but FID improves by 38%. The win is real
+there and IS simply could not see it. MNIST moves little either way and remains the least
+informative of the three. Past ×2 the gains stop being free — ×2.5 copies 15% of samples and ×3
+copies 51% — so **×2 is the usable operating point.**
+
+**4. The window schedule has to be widened coherently.** Applying ×2 to only the low-noise half of
+the schedule gives IS 4.00, only the high-noise half gives 3.06, but both halves together give
+6.29 — far more than the sum of the parts (+3.51 vs +1.50 of separate gains). A schedule that is
+wide at some noise levels and narrow at others is worse than either consistent choice, so this is
+a property of the trajectory rather than of any individual step.
+
+**5. The barrier does find a sensible schedule.** Nothing imposes one, yet the selected layer-2
 window runs from the full image at high noise down to $k=0$ (layer 2 off) at low noise (Figure 3).
 The coarse-to-fine ordering is a real finding even though the layer-2 update rule is not worth its
 cost.
 
-**Caveats.** 500 samples with 5 splits understates IS (real CIFAR-10 scores 8.75 here against ~11
-in the literature); only relative comparisons on this eval are meaningful. MNIST is uninformative
-throughout — real images score 1.915 and every configuration lands within the split spread of it.
-CelebA was still generating when this was built; its runs are in the table if present.
+**Caveats.** 500 samples understates IS (real CIFAR-10 scores 8.75 here against ~11 in the
+literature) and inflates FID (the real-vs-real floor is 54.9 on CIFAR-10, 32.8 on CelebA, 12.2 on
+MNIST rather than 0); only relative comparisons at equal sample count are meaningful. The layer-2
+posterior uses $\sigma^2=b_t^2/a_t^2$, the noise scale of $x/a_t$, even though it conditions on the
+already-denoised $\hat{x}_1$ whose error is smaller and not isotropic — hshunt has flagged this
+posterior as incorrect and is supplying the corrected form, which will change the deltas and the
+entropies the barrier thresholds on.
 '''))
 
 nb = {
