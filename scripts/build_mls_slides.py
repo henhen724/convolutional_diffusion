@@ -40,17 +40,24 @@ def load():
 		m['mult'] = m.get('scale_multiplier') or 1.0
 		m['seed'] = 1 if f.parent.name.endswith('seed1') else 0
 		m['half'] = m.get('mult_half') or 'all'
+		m['hi'] = m.get('scale_multiplier_hi')
+		# A ramped multiplier is its own family: it is a different schedule *shape*, not a
+		# different point on the uniform one, so it gets its own frontier curve.
+		# Up- and down-ramps are separate families: they move in opposite directions, so a
+		# single curve through both would zig-zag rather than trace a frontier.
+		m['family'] = ('LSramp_down' if m['mult'] > m['hi'] else 'LSramp_up') if m['hi'] else m['method']
 		h = '' if m['half'] == 'all' else f", {m['half']}-noise half"
 		m['config'] = ('real images' if m['method'] == 'real' else
+		               f"LS (ramp x{m['mult']:g}→x{m['hi']:g})" if m['hi'] else
 		               ('LS' if m['mult'] == 1.0 else f"LS (windows x{m['mult']:g}{h})") if m['method'] == 'LS' else
 		               f"EBMLS barrier {m['barrier']:g}")
 		runs.append(m)
 	return runs
 
 
-def curve(runs, dataset, method):
+def curve(runs, dataset, family):
 	"""Full-trajectory runs only, so the split-half runs stay off the frontier curves."""
-	return sorted([r for r in runs if r['dataset'] == dataset and r['method'] == method
+	return sorted([r for r in runs if r['dataset'] == dataset and r['family'] == family
 	               and r['half'] == 'all' and r['seed'] == 0],
 	              key=lambda r: r['nn_rms_median'] if r['nn_rms_median'] is not None else 0)
 
@@ -78,9 +85,9 @@ def table_page(pdf, runs):
 	fig.text(.5, .89, 'IS higher is better, FID lower is better; NN-RMS higher = less memorized',
 	         ha='center', size=11, color='.35')
 	cols = ['dataset', 'config', 'seed', 'IS', 'FID', 'NN-RMS', 'copy frac']
-	order = {'real': 0, 'LS': 1, 'MLS': 2, 'EBMLS': 3}
+	order = {'real': 0, 'LS': 1, 'LSramp_down': 2, 'LSramp_up': 3, 'MLS': 4, 'EBMLS': 5}
 	body, colours = [], []
-	for r in sorted(runs, key=lambda r: (r['dataset'], order[r['method']], r['mult'], r['barrier'] or 0,
+	for r in sorted(runs, key=lambda r: (r['dataset'], order[r['family']], r['mult'], r['barrier'] or 0,
 	                                     r['half'], r['seed'])):
 		body.append([r['dataset'], r['config'], str(r['seed']), f"{r['IS_mean']:.3f} ± {r['IS_std']:.3f}",
 		             '—' if r.get('FID') is None else f"{r['FID']:.1f}",
@@ -123,14 +130,17 @@ def frontier_page(pdf, runs, dsets, ykey, ylab, title):
 	fig, axes = plt.subplots(1, len(dsets), figsize=FIGSIZE, squeeze=False)
 	fig.suptitle(title, weight='bold')
 	for ax, d in zip(axes[0], dsets):
-		for meth, c, mk, lab in [('LS', 'k', 'o-', 'LS (window multiplier)'),
+		for meth, c, mk, lab in [('LS', 'k', 'o-', 'LS (uniform multiplier)'),
+		                         ('LSramp_down', 'C0', 'D-', 'LS (ramp down, wide at low noise)'),
+		                         ('LSramp_up', 'C9', 'v-', 'LS (ramp up)'),
 		                         ('EBMLS', 'C3', 's-', 'EBMLS (barrier)')]:
 			s = [r for r in curve(runs, d, meth) if r.get(ykey) is not None]
 			if not s:
 				continue
 			ax.plot([r['nn_rms_median'] for r in s], [r[ykey] for r in s], mk, c=c, label=lab)
 			for r in s:
-				tag = f"x{r['mult']:g}" if meth == 'LS' else f"b={r['barrier']:g}"
+				tag = (f"b={r['barrier']:g}" if meth == 'EBMLS' else
+				       f"{r['mult']:g}→{r['hi']:g}" if r['hi'] else f"x{r['mult']:g}")
 				ax.annotate(tag, (r['nn_rms_median'], r[ykey]), fontsize=9, color=c,
 				            xytext=(4, 5), textcoords='offset points')
 		rl = [r for r in runs if r['dataset'] == d and r['method'] == 'real']
@@ -164,6 +174,39 @@ def superadd_page(pdf, runs):
 		ax.axhline(y[0], ls='--', c='k', lw=1)
 		ax.set_xticks(range(len(y))); ax.set_xticklabels(labels, rotation=18, ha='right', fontsize=9)
 		ax.set_ylabel(lab)
+	fig.tight_layout(); pdf.savefig(fig); plt.close(fig)
+
+
+def shape_page(pdf, runs):
+	"""Coherent widening is not the same as uniform widening: the tilt of the schedule matters."""
+	down = curve(runs, 'cifar10', 'LSramp_down')
+	if not down:
+		return
+	show = ([r for r in runs if r['dataset'] == 'cifar10' and r['family'] == 'LS'
+	         and r['seed'] == 0 and r['half'] == 'all' and r['mult'] in (1.0, 2.0)]
+	        + down + curve(runs, 'cifar10', 'LSramp_up'))
+	fig, axes = plt.subplots(1, 2, figsize=FIGSIZE)
+	fig.suptitle('Tilting the schedule beats widening it uniformly', weight='bold')
+	for r in show:
+		k = r['scales']
+		axes[0].plot(np.arange(len(k)) / (len(k) - 1), k, marker='.',
+		             c='.6' if r['mult'] == 1.0 and not r['hi'] else 'k' if not r['hi']
+		             else 'C0' if r['mult'] > r['hi'] else 'C9',
+		             label=r['config'].replace('LS ', '').strip('()'))
+	axes[0].set_xlabel('t  (low noise → high noise)'); axes[0].set_ylabel('window k')
+	axes[0].legend(fontsize=8); axes[0].set_title('window schedules')
+	for fam, c, mk, lab in [('LS', 'k', 'o-', 'uniform'), ('LSramp_down', 'C0', 'D-', 'ramp down'),
+	                        ('LSramp_up', 'C9', 'v-', 'ramp up')]:
+		s = [r for r in curve(runs, 'cifar10', fam) if r.get('FID') is not None]
+		if not s:
+			continue
+		axes[1].plot([r['nn_rms_median'] for r in s], [r['FID'] for r in s], mk, c=c, label=lab)
+		for r in s:
+			axes[1].annotate(f"{r['mult']:g}→{r['hi']:g}" if r['hi'] else f"x{r['mult']:g}",
+			                 (r['nn_rms_median'], r['FID']), fontsize=9, color=c,
+			                 xytext=(4, 5), textcoords='offset points')
+	axes[1].set_xlabel('NN-RMS  (right = less memorized)'); axes[1].set_ylabel('FID  (lower better)')
+	axes[1].legend(fontsize=9); axes[1].set_title('CIFAR-10 FID frontier by schedule shape')
 	fig.tight_layout(); pdf.savefig(fig); plt.close(fig)
 
 
@@ -241,6 +284,7 @@ def main():
 		frontier_page(pdf, runs, dsets, 'FID', 'FID  (lower better)',
 		              'Same frontier under FID — the metric that still works on CelebA and MNIST')
 		superadd_page(pdf, runs)
+		shape_page(pdf, runs)
 		schedule_page(pdf, runs, dsets)
 		samples_page(pdf, runs, dsets)
 		verdict_page(pdf, Path(args.verdict).read_text())

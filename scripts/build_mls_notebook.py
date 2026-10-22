@@ -91,17 +91,23 @@ for f in sorted(RES.glob('2026-10-2*/*/metrics.json')):
     m['mult'] = m.get('scale_multiplier') or 1.0
     m['seed'] = 1 if f.parent.name.endswith('seed1') else 0
     half = '' if m.get('mult_half', 'all') in (None, 'all') else f", {m['mult_half']}-noise half only"
+    m['hi'] = m.get('scale_multiplier_hi')
+    # A ramped multiplier is a different schedule *shape*, and up- and down-ramps move in
+    # opposite directions, so each is its own family with its own frontier curve.
+    m['family'] = ('LSramp_down' if m['mult'] > m['hi'] else 'LSramp_up') if m['hi'] else m['method']
     m['config'] = ('real images' if m['method'] == 'real' else
+                   f"LS (ramp x{m['mult']:g}→x{m['hi']:g})" if m['hi'] else
                    ('LS' if m['mult'] == 1.0 else f"LS (windows x{m['mult']:g}{half})") if m['method'] == 'LS' else
                    f"EBMLS barrier {m['barrier']:g}")
     RUNS.append(m)
 
 
-def sel(dataset=None, method=None, mult=None, seed=0, half='all', sort=None):
+def sel(dataset=None, method=None, family=None, mult=None, seed=0, half='all', sort=None):
     """half='all' keeps only the full-trajectory runs, so the split-half runs stay off the curves."""
     out = [r for r in RUNS
            if (dataset is None or r['dataset'] == dataset)
            and (method is None or r['method'] == method)
+           and (family is None or r['family'] == family)
            and (mult is None or r['mult'] == mult)
            and (seed is None or r['seed'] == seed)
            and (half is None or (r.get('mult_half') or 'all') == half)]
@@ -124,11 +130,11 @@ the nearest training image in normalized pixel units (**higher = less like the t
 '''))
 
 CELLS.append(code(r'''
-ORDER = {'real': 0, 'LS': 1, 'MLS': 2, 'EBMLS': 3}
+ORDER = {'real': 0, 'LS': 1, 'LSramp_down': 2, 'LSramp_up': 3, 'MLS': 4, 'EBMLS': 5}
 hdr = (f"{'dataset':8s} {'configuration':24s} {'seed':>4s} {'IS ↑':>14s} {'FID ↓':>7s} "
        f"{'KID ↓':>7s} {'NN-RMS':>7s} {'copy':>6s}")
 print(hdr + '\n' + '-' * len(hdr))
-for r in sorted(RUNS, key=lambda r: (r['dataset'], ORDER[r['method']], r['mult'], r['barrier'] or 0, r['seed'])):
+for r in sorted(RUNS, key=lambda r: (r['dataset'], ORDER[r['family']], r['mult'], r['barrier'] or 0, r['seed'])):
     nn = '   —  ' if r['nn_rms_median'] is None else f"{r['nn_rms_median']:7.3f}"
     cp = '  —  ' if r['copy_fraction'] is None else f"{r['copy_fraction']:6.3f}"
     fid = '   —  ' if r.get('FID') is None else f"{r['FID']:7.2f}"
@@ -177,15 +183,18 @@ for col, d in enumerate(DSETS):
     for row, (ykey, ylab) in enumerate([('IS_mean', 'Inception Score  (higher better)'),
                                         ('FID', 'FID  (lower better)')]):
         ax = axes[row][col]
-        for meth, c, mk, lab in [('LS', 'k', 'o-', 'LS (window multiplier)'),
-                                 ('EBMLS', 'C3', 's-', 'EBMLS (barrier)')]:
-            s = [r for r in sorted(sel(dataset=d, method=meth), key=lambda r: r['nn_rms_median'])
+        for fam, c, mk, lab in [('LS', 'k', 'o-', 'LS (uniform multiplier)'),
+                                ('LSramp_down', 'C0', 'D-', 'LS (ramp down: wide at low noise)'),
+                                ('LSramp_up', 'C9', 'v-', 'LS (ramp up)'),
+                                ('EBMLS', 'C3', 's-', 'EBMLS (barrier)')]:
+            s = [r for r in sorted(sel(dataset=d, family=fam), key=lambda r: r['nn_rms_median'])
                  if r.get(ykey) is not None]
             if not s:
                 continue
             ax.plot([r['nn_rms_median'] for r in s], [r[ykey] for r in s], mk, c=c, label=lab)
             for r in s:
-                tag = f"x{r['mult']:g}" if meth == 'LS' else f"b={r['barrier']:g}"
+                tag = (f"b={r['barrier']:g}" if fam == 'EBMLS' else
+                       f"{r['mult']:g}→{r['hi']:g}" if r['hi'] else f"x{r['mult']:g}")
                 ax.annotate(tag, (r['nn_rms_median'], r[ykey]), fontsize=8, color=c,
                             xytext=(4, 5), textcoords='offset points')
         rl = sel(dataset=d, method='real')
@@ -230,6 +239,50 @@ if split:
               f"copies {r['copy_fraction']:.3f}")
 else:
     print('no split-half runs found')
+'''))
+
+CELLS.append(md(r'''
+## Figure 2c — the shape of the schedule, not just its overall width
+
+Super-additivity rules out widening *half* the trajectory, but it does not show that a **uniform**
+multiplier is the best shape. These runs ramp the multiplier linearly from $m_0$ at $t=0$ to $m_1$
+at $t=1$ (a ramp rather than a step at the midpoint, since a step drops the window from 19 to 11
+across the seam and would confound the tilt with a broken coarse-to-fine ordering).
+
+A *down*-ramp loads the extra width onto the low-noise end and flattens the base schedule; an
+*up*-ramp steepens it. Left: the resulting window schedules. Right: where each lands on the
+FID-vs-memorization frontier, against the uniform family.
+''' ))
+
+CELLS.append(code(r'''
+fig, axes = plt.subplots(1, 2, figsize=(12, 4.4))
+show = (sel(dataset='cifar10', method='LS', mult=1.0) + sel(dataset='cifar10', method='LS', mult=2.0)
+        + sel(dataset='cifar10', family='LSramp_down') + sel(dataset='cifar10', family='LSramp_up'))
+for r in show:
+    k = r['scales']
+    axes[0].plot(np.arange(len(k)) / (len(k) - 1), k, marker='.',
+                 c='.6' if r['mult'] == 1.0 else 'k' if not r['hi'] else 'C0' if r['mult'] > r['hi'] else 'C9',
+                 label=r['config'].replace('LS ', '').strip('()'))
+axes[0].set_xlabel('t  (low noise → high noise)'); axes[0].set_ylabel('window k')
+axes[0].legend(fontsize=7); axes[0].set_title('window schedules')
+
+for fam, c, mk, lab in [('LS', 'k', 'o-', 'uniform'), ('LSramp_down', 'C0', 'D-', 'ramp down'),
+                        ('LSramp_up', 'C9', 'v-', 'ramp up')]:
+    s = [r for r in sorted(sel(dataset='cifar10', family=fam), key=lambda r: r['nn_rms_median'])
+         if r.get('FID') is not None]
+    if s:
+        axes[1].plot([r['nn_rms_median'] for r in s], [r['FID'] for r in s], mk, c=c, label=lab)
+        for r in s:
+            axes[1].annotate(f"{r['mult']:g}→{r['hi']:g}" if r['hi'] else f"x{r['mult']:g}",
+                             (r['nn_rms_median'], r['FID']), fontsize=8, color=c,
+                             xytext=(4, 5), textcoords='offset points')
+axes[1].set_xlabel('median NN-RMS  (right = less memorized)'); axes[1].set_ylabel('FID ↓')
+axes[1].legend(fontsize=8); axes[1].set_title('cifar10 — FID frontier by schedule shape')
+fig.tight_layout()
+
+for r in sorted(show, key=lambda r: -r['nn_rms_median']):
+    print(f"{r['config']:26s} seed {r['seed']}  NN-RMS {r['nn_rms_median']:.3f}  "
+          f"IS {r['IS_mean']:6.3f}  FID {r.get('FID') or float('nan'):7.2f}  copies {r['copy_fraction']:.3f}")
 '''))
 
 CELLS.append(md(r'''
@@ -363,7 +416,42 @@ the schedule gives IS 4.00, only the high-noise half gives 3.06, but both halves
 wide at some noise levels and narrow at others is worse than either consistent choice, so this is
 a property of the trajectory rather than of any individual step.
 
-**5. The barrier does find a sensible schedule.** Nothing imposes one, yet the selected layer-2
+**5. But coherent does not mean uniform: tilting the schedule beats ×2 outright.** Ramping the
+multiplier down from 3.4 at $t=0$ to 1.6 at $t=1$ — i.e. loading the extra width onto the
+low-noise end and *flattening* the base schedule — dominates the uniform family on CIFAR-10 at
+matched memorization, reproduced across two seeds:
+
+| schedule | seed | NN-RMS | IS ↑ | FID ↓ | copies |
+|---|---|---|---|---|---|
+| uniform ×2 | 0 / 1 | 0.270 / 0.274 | 6.29 / 6.07 | 93.96 / 93.04 | 0.000 / 0.000 |
+| **ramp 3.4→1.6** | 0 / 1 | 0.267 / 0.271 | **6.44 / 6.31** | **83.27 / 86.08** | 0.002 / 0.000 |
+
+Same distance to the training set, same (≈zero) copy fraction, ~9 FID better against a ~1 FID
+seed spread. The up-ramp is the control and it fails: 1.4→2.6 gives FID 89.8 at NN-RMS 0.227,
+*worse* than the uniform curve interpolated to the same x (≈77). So the direction of the tilt
+matters and it runs against the coarse-to-fine intuition — the base schedule is already too steep,
+and the fine-detail steps are the ones starved of context. The steeper down-ramps keep dominating
+(3.8→1.7 → FID 75.6 at NN-RMS 0.252 vs ×2.25's 80.8 at 0.240) but start buying it with copies, so
+**ramp 3.4→1.6 is the new zero-copy operating point on CIFAR-10, replacing uniform ×2.**
+
+**6. The tilt transfers to CelebA and is neutral on MNIST.** Running the same 3.4→1.6 ramp
+unchanged on the other two datasets:
+
+| dataset | schedule | NN-RMS | IS ↑ | FID ↓ | copies |
+|---|---|---|---|---|---|
+| CelebA | uniform ×2 | 0.302 | 2.344 | 79.37 | 0.000 |
+| CelebA | **ramp 3.4→1.6** | 0.301 | 2.344 | **70.02** | 0.000 |
+| MNIST | uniform ×2 | 0.240 | 1.918 | 17.03 | 0.078 |
+| MNIST | ramp 3.4→1.6 | 0.191 | 1.949 | 16.59 | 0.250 |
+
+CelebA is the cleanest comparison in the whole sweep — NN-RMS 0.301 against 0.302 and zero copies
+in both — and FID drops by 9.4, the same size of win as on CIFAR-10. **MNIST shows no effect:** the
+ramp lands at FID 16.59 with 25% copies where the uniform curve interpolated to the same NN-RMS
+gives ≈16.8 with ≈24% copies, so it is on the uniform frontier, not above it. MNIST has been
+uninformative throughout (its whole FID range is 19.0→15.8 against a real-image floor of 12.2), so
+this is weak evidence either way rather than a counterexample.
+
+**7. The barrier does find a sensible schedule.** Nothing imposes one, yet the selected layer-2
 window runs from the full image at high noise down to $k=0$ (layer 2 off) at low noise (Figure 3).
 The coarse-to-fine ordering is a real finding even though the layer-2 update rule is not worth its
 cost.

@@ -1,34 +1,45 @@
-1.  The entropy-barrier multilayer layer does not pay off.  On CIFAR-10 it is
-    dominated by plain LS with wider windows at every matched memorization
-    level, on both metrics.  FID sharpens this: barrier 1 beats the LS
-    baseline on IS (3.30 vs 2.78) but is clearly worse on FID (201 vs 189),
-    so its apparent IS gain was not a distribution gain.
+1.  The entropy-barrier multilayer layer does not pay off.  It is dominated by
+    plain LS with wider windows at every matched memorization level, on both
+    metrics.  FID sharpens this: barrier 1 beats the LS baseline on IS
+    (3.30 vs 2.78) but is clearly worse on FID (201 vs 189), so its apparent
+    IS gain was not a distribution gain.
 
-2.  Why: layer 2's per-pixel weights sum to 1, so x1 + d2 = sum_n w_n(p) x0_n(p)
+    Why: layer 2's per-pixel weights sum to 1, so x1 + d2 = sum_n w_n(p) x0_n(p)
     exactly.  Layer 2 replaces layer 1's estimate rather than refining it, and
-    widening its window walks straight into copying training images.
-    (The layer-2 posterior itself is under revision — hshunt is re-deriving
-    the correct posterior for a training-set image, which will change these
-    numbers but not the structural point.)
+    widening its window walks straight into copying.  (The layer-2 posterior is
+    under revision -- hshunt is re-deriving the correct posterior for a
+    training-set image -- which will change these numbers but not this point.)
 
-3.  The real result came from the control.  Uniformly scaling the per-step LS
-    windows x2 improves every dataset with zero training-set copies:
+2.  The result came from the control: the per-step window schedule, not the
+    layer count, is what moves the metrics.  Uniformly scaling the windows x2
+    improves every dataset with zero training-set copies:
       CIFAR-10   IS 2.78 -> 6.29,  FID 189 -> 94
       CelebA     IS 2.39 -> 2.34,  FID 128 -> 79
       MNIST      IS 1.86 -> 1.92,  FID 19.0 -> 17.0
-    Reproduced across two seeds on CIFAR-10.  Past x2 the gains are bought by
-    copying: x2.5 copies 15% of samples, x3 copies 51%.
+    Past x2 the gains are bought by copying (x2.5 copies 15%, x3 copies 51%).
 
-4.  IS alone would have read CelebA as "no effect" (flat at ~2.4), because an
-    ImageNet classifier has nothing to say about faces -- real CelebA images
-    only score 3.31.  FID is what shows the window-width win generalizes.
+3.  IS alone would have read CelebA as "no effect" (flat at ~2.4): an ImageNet
+    classifier has nothing to say about faces, and real CelebA images only
+    score 3.31.  FID is what shows the window-width win generalizes.
 
-5.  The widening has to be coherent across the whole trajectory.  Applying x2
-    to only half the schedule gives IS 3.06 (high-noise half) or 4.00
-    (low-noise half) against 2.78 baseline; both halves together give 6.29.
-    +0.28 and +1.22 separately, +3.51 jointly -- strongly super-additive.
+4.  The widening must be coherent across the trajectory.  x2 on only half the
+    schedule gives IS 3.06 (high-noise half) or 4.00 (low-noise half) against
+    2.78 baseline; both halves together give 6.29 -- strongly super-additive.
 
-6.  Next: the per-step window schedule is the thing worth optimizing, not the
-    layer count.  EBMLS's candidate search is already O(1) in image size via
-    integral images; the remaining blocker for ImageNet is the full pass over
-    the training set at every step.
+5.  But coherent is not the same as uniform.  Ramping the multiplier down from
+    3.4 at t=0 to 1.6 at t=1 -- loading the extra width onto the low-noise end
+    and flattening the base schedule -- beats uniform x2 at matched
+    memorization, on two datasets and two seeds:
+      CIFAR-10  NN-RMS 0.267/0.271 vs 0.270/0.274, FID 83.3/86.1 vs 94.0/93.0
+      CelebA    NN-RMS 0.301      vs 0.302,        FID 70.0      vs 79.4
+      MNIST     no effect (on the uniform frontier, and uninformative anyway)
+    The up-ramp is the control and it fails: 1.4->2.6 gives FID 89.8 at NN-RMS
+    0.227, worse than the uniform curve at the same point (~77).  So the tilt's
+    direction matters, and it runs against the coarse-to-fine intuition: the
+    base schedule is already too steep and the fine-detail steps are the ones
+    starved of context.
+
+6.  Next: fit the per-step schedule directly against FID under a zero-copy
+    constraint, rather than searching two-parameter ramps.  For ImageNet, the
+    candidate search is already O(1) in image size via integral images; the
+    remaining blocker is the full pass over the training set at every step.
