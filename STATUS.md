@@ -23,16 +23,17 @@ EBMLS stays dominated: barrier 1.0 wins on IS (3.30 vs 2.78) but not FID (201/18
 
 Both controls fail, bracketing the mechanism. **Up-ramp** is worse than uniform
 (1.4→2.6: FID 89.8 at NN-RMS 0.227 vs ≈77), so tilt *direction* matters and runs
-against the coarse-to-fine intuition. But a **flat schedule** (`--flat_k`) sits on
-the *uniform* frontier, not the ramp's (k=17: IS 5.38 at 0.268 vs the ramp's 6.44;
-k=23: 6.86 at 0.237). The ordering still earns its keep; the optimum is between.
+against the coarse-to-fine intuition. A **flat schedule** (`--flat_k`) is no better
+than uniform — at the zero-copy point it is worse (k=17: FID 99.0 at NN-RMS 0.268
+vs 94.0 uniform, 83.3 ramp; k=23: 76.5 at 0.237 vs 80.8 uniform, copies 0.044).
+So the ordering earns its keep and the optimum lies between ramp and flat.
 
 `notebooks/mls_entropy_barrier_results.ipynb` + slides PDF (sent to OneDrive); data in `results/mls_inception/2026-10-2{1,1b,1c,1d,2}/`.
 
 ## Running jobs
 
-- 48915101 `add_fid.py`, the two flat-schedule runs, pending on `sganguli`; merges FID into their metrics.json only — rerun the builders once it lands.
-- 48921219 `--scale_gamma` scan, CIFAR-10 seed 0, gamma 0.75/0.60/0.45/0.25 at m=2.0 → `2026-10-21d/`. Gamma compresses the base schedule's dynamic range around its geometric mean: gamma=1 *is* uniform x2, gamma=0 is flat at the same level, so it interpolates the two shapes the controls bracketed. Hypothesis: FID at matched NN-RMS is best at intermediate gamma, beating uniform x2 (94.0 at NN-RMS 0.270).
+- 48921219 `--scale_gamma` scan (gamma 0.75/0.60/0.45/0.25 at m=2.0, CIFAR-10 seed 0) → `2026-10-21d/`, FID queued as 48923802. Gamma compresses the base schedule's range about its geometric mean (gamma=1 *is* uniform x2, gamma=0 flat at the same level). **Looks negative:** the first three sit on the uniform frontier (IS 5.17/5.15/5.02 at NN-RMS 0.288/0.289/0.291, zero copies), and gamma 0.6 reproduces the mild 2.6→1.4 ramp almost exactly. Compressing the range at a *fixed* level is not the mechanism.
+- 48924943 the follow-up, `2026-10-21e/`: with the schedule's peak window held fixed (m1=1.6), push only the low-noise end — ramps 4.5→1.6 and 6.0→1.6, plus 3.4→2.0 as the control that moves the peak instead. FID queued as 48924944. Hypothesis from the kgeo/kmax table: memorization tracks the *peak* window while the low-noise end buys quality almost free, so 4.5/6.0 should hold NN-RMS ≈0.27 at zero copies with lower FID, and 3.4→2.0 should memorize more.
 
 ## Open problems
 

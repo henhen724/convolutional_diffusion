@@ -39,7 +39,18 @@
     base schedule is already too steep and the fine-detail steps are the ones
     starved of context.
 
-6.  Next: fit the per-step schedule directly against FID under a zero-copy
-    constraint, rather than searching two-parameter ramps.  For ImageNet, the
+    Flattening is not what the ramp is buying either.  A flat schedule -- the
+    same window at every step -- is no better than uniform and at the zero-copy
+    point is worse: k=17 gives FID 99.0 at NN-RMS 0.268, against 94.0 for
+    uniform x2 and 83.3 for the ramp at the same distance; k=23 gives 76.5 at
+    0.237, against 80.8 for uniform x2.25, but already copies 4.4% of samples.
+    So the coarse-to-fine ordering still earns its keep, and the optimal shape
+    is a partial compression of the base schedule, between ramp and flat.
+
+6.  Next: --scale_gamma now interpolates those two shapes directly, raising the
+    base schedule's windows to a power gamma about their geometric mean, so
+    gamma=1 is the uniform multiplier and gamma=0 the flat schedule at the same
+    level.  Scan it, then fit the per-step schedule directly against FID under a
+    zero-copy constraint rather than searching two-parameter ramps.  For ImageNet, the
     candidate search is already O(1) in image size via integral images; the
     remaining blocker is the full pass over the training set at every step.

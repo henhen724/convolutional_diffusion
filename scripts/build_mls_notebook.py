@@ -92,10 +92,15 @@ for f in sorted(RES.glob('2026-10-2*/*/metrics.json')):
     m['seed'] = 1 if f.parent.name.endswith('seed1') else 0
     half = '' if m.get('mult_half', 'all') in (None, 'all') else f", {m['mult_half']}-noise half only"
     m['hi'] = m.get('scale_multiplier_hi')
-    # A ramped multiplier is a different schedule *shape*, and up- and down-ramps move in
-    # opposite directions, so each is its own family with its own frontier curve.
-    m['family'] = ('LSramp_down' if m['mult'] > m['hi'] else 'LSramp_up') if m['hi'] else m['method']
+    m['flat'], m['gamma'] = m.get('flat_k'), m.get('scale_gamma')
+    # Each schedule *shape* is its own family with its own frontier curve: up- and down-ramps
+    # move in opposite directions, and the flat and gamma runs carry scale_multiplier 1.0 and
+    # 2.0, so without this they would be read as plain uniform runs at those multipliers.
+    m['family'] = ('LSflat' if m['flat'] else 'LSgamma' if m['gamma'] is not None else
+                   ('LSramp_down' if m['mult'] > m['hi'] else 'LSramp_up') if m['hi'] else m['method'])
     m['config'] = ('real images' if m['method'] == 'real' else
+                   f"LS (flat k={m['flat']})" if m['flat'] else
+                   f"LS (gamma {m['gamma']:g} at x{m['mult']:g})" if m['gamma'] is not None else
                    f"LS (ramp x{m['mult']:g}→x{m['hi']:g})" if m['hi'] else
                    ('LS' if m['mult'] == 1.0 else f"LS (windows x{m['mult']:g}{half})") if m['method'] == 'LS' else
                    f"EBMLS barrier {m['barrier']:g}")
@@ -115,8 +120,9 @@ def sel(dataset=None, method=None, family=None, mult=None, seed=0, half='all', s
 
 
 DSETS = [d for d in ['cifar10', 'mnist', 'celeba'] if sel(dataset=d)]
+# cwd=, not `git -C`: the stock Sherlock git is 1.8.3.1 and has no -C.
 print(f'{len(RUNS)} runs over {DSETS}; commit '
-      + subprocess.run(['git', '-C', str(ROOT), 'rev-parse', '--short', 'HEAD'],
+      + subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], cwd=str(ROOT),
                        capture_output=True, text=True).stdout.strip())
 '''))
 
@@ -130,7 +136,8 @@ the nearest training image in normalized pixel units (**higher = less like the t
 '''))
 
 CELLS.append(code(r'''
-ORDER = {'real': 0, 'LS': 1, 'LSramp_down': 2, 'LSramp_up': 3, 'MLS': 4, 'EBMLS': 5}
+ORDER = {'real': 0, 'LS': 1, 'LSramp_down': 2, 'LSramp_up': 3, 'LSgamma': 4, 'LSflat': 5,
+         'MLS': 6, 'EBMLS': 7}
 hdr = (f"{'dataset':8s} {'configuration':24s} {'seed':>4s} {'IS ↑':>14s} {'FID ↓':>7s} "
        f"{'KID ↓':>7s} {'NN-RMS':>7s} {'copy':>6s}")
 print(hdr + '\n' + '-' * len(hdr))
@@ -157,7 +164,7 @@ for ax, d in zip(axes[0], DSETS):
     if eb:
         ax.errorbar([r['barrier'] for r in eb], [r['IS_mean'] for r in eb],
                     yerr=[r['IS_std'] for r in eb], marker='o', capsize=3, c='C3', label='EBMLS')
-    ls = sel(dataset=d, method='LS', mult=1.0)
+    ls = sel(dataset=d, family='LS', mult=1.0)
     if ls:
         ax.axhline(ls[0]['IS_mean'], ls='--', c='k', label=f"LS baseline ({ls[0]['IS_mean']:.2f})")
         ax.axhspan(*(ls[0]['IS_mean'] + np.array([-1, 1]) * ls[0]['IS_std']), color='k', alpha=.08)
@@ -186,6 +193,8 @@ for col, d in enumerate(DSETS):
         for fam, c, mk, lab in [('LS', 'k', 'o-', 'LS (uniform multiplier)'),
                                 ('LSramp_down', 'C0', 'D-', 'LS (ramp down: wide at low noise)'),
                                 ('LSramp_up', 'C9', 'v-', 'LS (ramp up)'),
+                                ('LSgamma', 'C4', '^-', 'LS (gamma: compressed range)'),
+                                ('LSflat', 'C1', 'x-', 'LS (flat = gamma 0)'),
                                 ('EBMLS', 'C3', 's-', 'EBMLS (barrier)')]:
             s = [r for r in sorted(sel(dataset=d, family=fam), key=lambda r: r['nn_rms_median'])
                  if r.get(ykey) is not None]
@@ -194,6 +203,8 @@ for col, d in enumerate(DSETS):
             ax.plot([r['nn_rms_median'] for r in s], [r[ykey] for r in s], mk, c=c, label=lab)
             for r in s:
                 tag = (f"b={r['barrier']:g}" if fam == 'EBMLS' else
+                       f"k={r['flat']}" if r['flat'] else
+                       f"g={r['gamma']:g}" if r['gamma'] is not None else
                        f"{r['mult']:g}→{r['hi']:g}" if r['hi'] else f"x{r['mult']:g}")
                 ax.annotate(tag, (r['nn_rms_median'], r[ykey]), fontsize=8, color=c,
                             xytext=(4, 5), textcoords='offset points')
@@ -214,8 +225,8 @@ These runs apply the ×2 multiplier to only half of it, leaving the other half a
 
 CELLS.append(code(r'''
 split = [r for r in RUNS if (r.get('mult_half') or 'all') != 'all']
-base = sel(dataset='cifar10', method='LS', mult=1.0)
-full = sel(dataset='cifar10', method='LS', mult=2.0)
+base = sel(dataset='cifar10', family='LS', mult=1.0)
+full = sel(dataset='cifar10', family='LS', mult=2.0)
 if split:
     labels, vals = [], []
     for r in [base[0]] + sorted(split, key=lambda r: r['mult_half']) + [full[0]]:
@@ -256,25 +267,29 @@ FID-vs-memorization frontier, against the uniform family.
 
 CELLS.append(code(r'''
 fig, axes = plt.subplots(1, 2, figsize=(12, 4.4))
-show = (sel(dataset='cifar10', method='LS', mult=1.0) + sel(dataset='cifar10', method='LS', mult=2.0)
-        + sel(dataset='cifar10', family='LSramp_down') + sel(dataset='cifar10', family='LSramp_up'))
+COLOUR = {'LS': 'k', 'LSramp_down': 'C0', 'LSramp_up': 'C9', 'LSgamma': 'C4', 'LSflat': 'C1'}
+show = (sel(dataset='cifar10', family='LS', mult=1.0) + sel(dataset='cifar10', family='LS', mult=2.0)
+        + sel(dataset='cifar10', family='LSramp_down') + sel(dataset='cifar10', family='LSramp_up')
+        + sel(dataset='cifar10', family='LSgamma') + sel(dataset='cifar10', family='LSflat'))
 for r in show:
     k = r['scales']
     axes[0].plot(np.arange(len(k)) / (len(k) - 1), k, marker='.',
-                 c='.6' if r['mult'] == 1.0 else 'k' if not r['hi'] else 'C0' if r['mult'] > r['hi'] else 'C9',
+                 c='.6' if r['family'] == 'LS' and r['mult'] == 1.0 else COLOUR[r['family']],
                  label=r['config'].replace('LS ', '').strip('()'))
 axes[0].set_xlabel('t  (low noise → high noise)'); axes[0].set_ylabel('window k')
 axes[0].legend(fontsize=7); axes[0].set_title('window schedules')
 
-for fam, c, mk, lab in [('LS', 'k', 'o-', 'uniform'), ('LSramp_down', 'C0', 'D-', 'ramp down'),
-                        ('LSramp_up', 'C9', 'v-', 'ramp up')]:
+for fam, mk, lab in [('LS', 'o-', 'uniform'), ('LSramp_down', 'D-', 'ramp down'),
+                     ('LSramp_up', 'v-', 'ramp up'), ('LSgamma', '^-', 'gamma-compressed'),
+                     ('LSflat', 'x-', 'flat (gamma 0)')]:
     s = [r for r in sorted(sel(dataset='cifar10', family=fam), key=lambda r: r['nn_rms_median'])
          if r.get('FID') is not None]
     if s:
-        axes[1].plot([r['nn_rms_median'] for r in s], [r['FID'] for r in s], mk, c=c, label=lab)
+        axes[1].plot([r['nn_rms_median'] for r in s], [r['FID'] for r in s], mk, c=COLOUR[fam], label=lab)
         for r in s:
-            axes[1].annotate(f"{r['mult']:g}→{r['hi']:g}" if r['hi'] else f"x{r['mult']:g}",
-                             (r['nn_rms_median'], r['FID']), fontsize=8, color=c,
+            axes[1].annotate(f"k={r['flat']}" if r['flat'] else f"g={r['gamma']:g}" if r['gamma'] is not None
+                             else f"{r['mult']:g}→{r['hi']:g}" if r['hi'] else f"x{r['mult']:g}",
+                             (r['nn_rms_median'], r['FID']), fontsize=8, color=COLOUR[fam],
                              xytext=(4, 5), textcoords='offset points')
 axes[1].set_xlabel('median NN-RMS  (right = less memorized)'); axes[1].set_ylabel('FID ↓')
 axes[1].legend(fontsize=8); axes[1].set_title('cifar10 — FID frontier by schedule shape')
@@ -327,7 +342,7 @@ CELLS.append(code(r'''
 picks = []
 for d in DSETS:
     nocopy = [r for r in sel(dataset=d, method='LS') if (r['copy_fraction'] or 0) < 0.01]
-    picks += sel(dataset=d, method='LS', mult=1.0)[:1]                                   # baseline
+    picks += sel(dataset=d, family='LS', mult=1.0)[:1]                                   # baseline
     picks += sorted(nocopy, key=lambda r: -r['IS_mean'])[:1]                             # best non-copying LS
     picks += sorted(sel(dataset=d, method='EBMLS'), key=lambda r: -r['IS_mean'])[:1]     # best EBMLS
 picks = [r for i, r in enumerate(picks) if r['dir'] not in [q['dir'] for q in picks[:i]]]
@@ -434,7 +449,17 @@ and the fine-detail steps are the ones starved of context. The steeper down-ramp
 (3.8→1.7 → FID 75.6 at NN-RMS 0.252 vs ×2.25's 80.8 at 0.240) but start buying it with copies, so
 **ramp 3.4→1.6 is the new zero-copy operating point on CIFAR-10, replacing uniform ×2.**
 
-**6. The tilt transfers to CelebA and is neutral on MNIST.** Running the same 3.4→1.6 ramp
+**6. Flattening is not the mechanism either.** A flat schedule (`--flat_k`: the same window at
+every step, the down-ramp's limit) is no better than uniform, and at the zero-copy point it is
+worse — $k=17$ gives FID 99.0 at NN-RMS 0.268, against 94.0 for uniform ×2 and 83.3 for the ramp
+at the same distance. $k=23$ does beat uniform ×2.25 (76.5 at 0.237 vs 80.8 at 0.240) but already
+copies 4.4% of samples. Both limits of the shape family therefore fail — steepening (the up-ramp)
+and flattening — so the coarse-to-fine ordering earns its keep and the optimum is a *partial*
+compression of the base schedule. `--scale_gamma` scans exactly that: it raises the base windows
+to a power $\gamma$ about their geometric mean, so $\gamma=1$ is the uniform multiplier and
+$\gamma=0$ the flat schedule at the same level.
+
+**7. The tilt transfers to CelebA and is neutral on MNIST.** Running the same 3.4→1.6 ramp
 unchanged on the other two datasets:
 
 | dataset | schedule | NN-RMS | IS ↑ | FID ↓ | copies |
@@ -451,7 +476,7 @@ gives ≈16.8 with ≈24% copies, so it is on the uniform frontier, not above it
 uninformative throughout (its whole FID range is 19.0→15.8 against a real-image floor of 12.2), so
 this is weak evidence either way rather than a counterexample.
 
-**7. The barrier does find a sensible schedule.** Nothing imposes one, yet the selected layer-2
+**8. The barrier does find a sensible schedule.** Nothing imposes one, yet the selected layer-2
 window runs from the full image at high noise down to $k=0$ (layer 2 off) at low noise (Figure 3).
 The coarse-to-fine ordering is a real finding even though the layer-2 update rule is not worth its
 cost.

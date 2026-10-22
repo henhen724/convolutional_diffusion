@@ -41,13 +41,20 @@ def load():
 		m['seed'] = 1 if f.parent.name.endswith('seed1') else 0
 		m['half'] = m.get('mult_half') or 'all'
 		m['hi'] = m.get('scale_multiplier_hi')
-		# A ramped multiplier is its own family: it is a different schedule *shape*, not a
-		# different point on the uniform one, so it gets its own frontier curve.
-		# Up- and down-ramps are separate families: they move in opposite directions, so a
+		m['flat'] = m.get('flat_k')
+		m['gamma'] = m.get('scale_gamma')
+		# Every schedule *shape* is its own family: a shape is not a different point on the
+		# uniform frontier, so each gets its own curve.  Flat and gamma runs in particular
+		# carry scale_multiplier 1.0 and 2.0, so without this they would be plotted and
+		# tabulated as if they were plain uniform runs at those multipliers.
+		# Up- and down-ramps are separate families too: they move in opposite directions, so a
 		# single curve through both would zig-zag rather than trace a frontier.
-		m['family'] = ('LSramp_down' if m['mult'] > m['hi'] else 'LSramp_up') if m['hi'] else m['method']
+		m['family'] = ('LSflat' if m['flat'] else 'LSgamma' if m['gamma'] is not None else
+		               ('LSramp_down' if m['mult'] > m['hi'] else 'LSramp_up') if m['hi'] else m['method'])
 		h = '' if m['half'] == 'all' else f", {m['half']}-noise half"
 		m['config'] = ('real images' if m['method'] == 'real' else
+		               f"LS (flat k={m['flat']})" if m['flat'] else
+		               f"LS (γ={m['gamma']:g} at x{m['mult']:g})" if m['gamma'] is not None else
 		               f"LS (ramp x{m['mult']:g}→x{m['hi']:g})" if m['hi'] else
 		               ('LS' if m['mult'] == 1.0 else f"LS (windows x{m['mult']:g}{h})") if m['method'] == 'LS' else
 		               f"EBMLS barrier {m['barrier']:g}")
@@ -85,7 +92,8 @@ def table_page(pdf, runs):
 	fig.text(.5, .89, 'IS higher is better, FID lower is better; NN-RMS higher = less memorized',
 	         ha='center', size=11, color='.35')
 	cols = ['dataset', 'config', 'seed', 'IS', 'FID', 'NN-RMS', 'copy frac']
-	order = {'real': 0, 'LS': 1, 'LSramp_down': 2, 'LSramp_up': 3, 'MLS': 4, 'EBMLS': 5}
+	order = {'real': 0, 'LS': 1, 'LSramp_down': 2, 'LSramp_up': 3, 'LSgamma': 4, 'LSflat': 5,
+	         'MLS': 6, 'EBMLS': 7}
 	body, colours = [], []
 	for r in sorted(runs, key=lambda r: (r['dataset'], order[r['family']], r['mult'], r['barrier'] or 0,
 	                                     r['half'], r['seed'])):
@@ -96,7 +104,7 @@ def table_page(pdf, runs):
 		best = (r['method'] == 'LS' and (r['copy_fraction'] or 1) < 0.01 and r['mult'] > 1
 		        and r['half'] == 'all')
 		colours.append(['#d8f0d8' if best else
-		                '#eef5ff' if r['method'] == 'LS' and r['mult'] == 1.0 else
+		                '#eef5ff' if r['family'] == 'LS' and r['mult'] == 1.0 else
 		                '#f0f0f0' if r['method'] == 'real' else 'white'] * len(cols))
 	ax = fig.add_axes([.05, .04, .90, .82]); ax.set_axis_off()
 	t = ax.table(cellText=body, colLabels=cols, cellLoc='center', loc='upper center', cellColours=colours)
@@ -114,7 +122,7 @@ def barrier_page(pdf, runs, dsets):
 		if eb:
 			ax.errorbar([r['barrier'] for r in eb], [r['IS_mean'] for r in eb],
 			            yerr=[r['IS_std'] for r in eb], marker='o', capsize=3, c='C3', label='EBMLS')
-		ls = [r for r in s if r['method'] == 'LS' and r['mult'] == 1.0]
+		ls = [r for r in s if r['family'] == 'LS' and r['mult'] == 1.0]
 		if ls:
 			ax.axhline(ls[0]['IS_mean'], ls='--', c='k', label=f"LS baseline {ls[0]['IS_mean']:.2f}")
 		rl = [r for r in s if r['method'] == 'real']
@@ -133,6 +141,8 @@ def frontier_page(pdf, runs, dsets, ykey, ylab, title):
 		for meth, c, mk, lab in [('LS', 'k', 'o-', 'LS (uniform multiplier)'),
 		                         ('LSramp_down', 'C0', 'D-', 'LS (ramp down, wide at low noise)'),
 		                         ('LSramp_up', 'C9', 'v-', 'LS (ramp up)'),
+		                         ('LSgamma', 'C4', '^-', 'LS (γ: compressed range)'),
+		                         ('LSflat', 'C1', 'x-', 'LS (flat, γ=0)'),
 		                         ('EBMLS', 'C3', 's-', 'EBMLS (barrier)')]:
 			s = [r for r in curve(runs, d, meth) if r.get(ykey) is not None]
 			if not s:
@@ -140,6 +150,8 @@ def frontier_page(pdf, runs, dsets, ykey, ylab, title):
 			ax.plot([r['nn_rms_median'] for r in s], [r[ykey] for r in s], mk, c=c, label=lab)
 			for r in s:
 				tag = (f"b={r['barrier']:g}" if meth == 'EBMLS' else
+				       f"k={r['flat']}" if r['flat'] else
+				       f"γ={r['gamma']:g}" if r['gamma'] is not None else
 				       f"{r['mult']:g}→{r['hi']:g}" if r['hi'] else f"x{r['mult']:g}")
 				ax.annotate(tag, (r['nn_rms_median'], r[ykey]), fontsize=9, color=c,
 				            xytext=(4, 5), textcoords='offset points')
@@ -153,9 +165,9 @@ def frontier_page(pdf, runs, dsets, ykey, ylab, title):
 
 def superadd_page(pdf, runs):
 	split = [r for r in runs if r['half'] != 'all']
-	base = [r for r in runs if r['dataset'] == 'cifar10' and r['method'] == 'LS' and r['mult'] == 1.0
+	base = [r for r in runs if r['dataset'] == 'cifar10' and r['family'] == 'LS' and r['mult'] == 1.0
 	        and r['half'] == 'all' and r['seed'] == 0]
-	full = [r for r in runs if r['dataset'] == 'cifar10' and r['method'] == 'LS' and r['mult'] == 2.0
+	full = [r for r in runs if r['dataset'] == 'cifar10' and r['family'] == 'LS' and r['mult'] == 2.0
 	        and r['half'] == 'all' and r['seed'] == 0]
 	if not (split and base and full):
 		return
@@ -182,28 +194,31 @@ def shape_page(pdf, runs):
 	down = curve(runs, 'cifar10', 'LSramp_down')
 	if not down:
 		return
+	colour = {'LS': 'k', 'LSramp_down': 'C0', 'LSramp_up': 'C9', 'LSgamma': 'C4', 'LSflat': 'C1'}
 	show = ([r for r in runs if r['dataset'] == 'cifar10' and r['family'] == 'LS'
 	         and r['seed'] == 0 and r['half'] == 'all' and r['mult'] in (1.0, 2.0)]
-	        + down + curve(runs, 'cifar10', 'LSramp_up'))
+	        + down + curve(runs, 'cifar10', 'LSramp_up')
+	        + curve(runs, 'cifar10', 'LSgamma') + curve(runs, 'cifar10', 'LSflat'))
 	fig, axes = plt.subplots(1, 2, figsize=FIGSIZE)
 	fig.suptitle('Tilting the schedule beats widening it uniformly', weight='bold')
 	for r in show:
 		k = r['scales']
 		axes[0].plot(np.arange(len(k)) / (len(k) - 1), k, marker='.',
-		             c='.6' if r['mult'] == 1.0 and not r['hi'] else 'k' if not r['hi']
-		             else 'C0' if r['mult'] > r['hi'] else 'C9',
+		             c='.6' if r['family'] == 'LS' and r['mult'] == 1.0 else colour[r['family']],
 		             label=r['config'].replace('LS ', '').strip('()'))
 	axes[0].set_xlabel('t  (low noise → high noise)'); axes[0].set_ylabel('window k')
 	axes[0].legend(fontsize=8); axes[0].set_title('window schedules')
-	for fam, c, mk, lab in [('LS', 'k', 'o-', 'uniform'), ('LSramp_down', 'C0', 'D-', 'ramp down'),
-	                        ('LSramp_up', 'C9', 'v-', 'ramp up')]:
+	for fam, mk, lab in [('LS', 'o-', 'uniform'), ('LSramp_down', 'D-', 'ramp down'),
+	                     ('LSramp_up', 'v-', 'ramp up'), ('LSgamma', '^-', 'γ-compressed'),
+	                     ('LSflat', 'x-', 'flat (γ=0)')]:
 		s = [r for r in curve(runs, 'cifar10', fam) if r.get('FID') is not None]
 		if not s:
 			continue
-		axes[1].plot([r['nn_rms_median'] for r in s], [r['FID'] for r in s], mk, c=c, label=lab)
+		axes[1].plot([r['nn_rms_median'] for r in s], [r['FID'] for r in s], mk, c=colour[fam], label=lab)
 		for r in s:
-			axes[1].annotate(f"{r['mult']:g}→{r['hi']:g}" if r['hi'] else f"x{r['mult']:g}",
-			                 (r['nn_rms_median'], r['FID']), fontsize=9, color=c,
+			axes[1].annotate(f"k={r['flat']}" if r['flat'] else f"γ={r['gamma']:g}" if r['gamma'] is not None
+			                 else f"{r['mult']:g}→{r['hi']:g}" if r['hi'] else f"x{r['mult']:g}",
+			                 (r['nn_rms_median'], r['FID']), fontsize=9, color=colour[fam],
 			                 xytext=(4, 5), textcoords='offset points')
 	axes[1].set_xlabel('NN-RMS  (right = less memorized)'); axes[1].set_ylabel('FID  (lower better)')
 	axes[1].legend(fontsize=9); axes[1].set_title('CIFAR-10 FID frontier by schedule shape')
@@ -228,7 +243,7 @@ def samples_page(pdf, runs, dsets):
 	d = dsets[0]
 	s = [r for r in runs if r['dataset'] == d and r['method'] != 'real']
 	nocopy = [r for r in s if r['method'] == 'LS' and r['copy_fraction'] < 0.01]
-	picks = ([r for r in s if r['method'] == 'LS' and r['mult'] == 1.0][:1]
+	picks = ([r for r in s if r['family'] == 'LS' and r['mult'] == 1.0][:1]
 	         + sorted(nocopy, key=lambda r: -r['IS_mean'])[:1]
 	         + sorted([r for r in s if r['method'] == 'EBMLS'], key=lambda r: -r['IS_mean'])[:1]
 	         + sorted([r for r in s if r['method'] == 'LS'], key=lambda r: -r['copy_fraction'])[:1])
