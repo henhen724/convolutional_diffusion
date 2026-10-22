@@ -264,10 +264,24 @@ def samples_page(pdf, runs, dsets):
 
 
 def verdict_page(pdf, text):
-	fig = plt.figure(figsize=FIGSIZE)
-	fig.text(.5, .92, 'Where this leaves us', ha='center', size=18, weight='bold')
-	fig.text(.07, .80, text, size=12.5, va='top', linespacing=1.8)
-	pdf.savefig(fig); plt.close(fig)
+	# The verdict gains a point most sessions and had started running off the bottom of the
+	# page.  Paginate instead of shrinking the font: hshunt reads these on a phone, so losing
+	# the last point and dropping to a 6pt font are both worse than a second page.  Points are
+	# separated by blank lines, so pack whole points onto each page, never splitting one.
+	per_page = int(.74 * FIGSIZE[1] * 72 / (12.5 * 1.8))
+	pages, cur = [], []
+	for point in text.strip('\n').split('\n\n'):
+		n = point.count('\n') + 1
+		if cur and sum(p.count('\n') + 2 for p in cur) + n > per_page:
+			pages.append(cur); cur = []
+		cur.append(point)
+	pages.append(cur)
+	for i, page in enumerate(pages):
+		fig = plt.figure(figsize=FIGSIZE)
+		title = 'Where this leaves us' + (f' ({i + 1}/{len(pages)})' if len(pages) > 1 else '')
+		fig.text(.5, .92, title, ha='center', size=18, weight='bold')
+		fig.text(.07, .80, '\n\n'.join(page), size=12.5, va='top', linespacing=1.8)
+		pdf.savefig(fig); plt.close(fig)
 
 
 def main():

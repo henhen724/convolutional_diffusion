@@ -364,7 +364,8 @@ CELLS.append(md(r'''
 CELLS.append(code(r'''
 print(json.dumps({
     'model_code_commit': '2c2dc90 (MLS + entropy barrier), harness 2aeebca (scale_multiplier control)',
-    'notebook_built_at': subprocess.run(['git', '-C', str(ROOT), 'rev-parse', '--short', 'HEAD'],
+    # cwd=, not `git -C`: the stock Sherlock git is 1.8.3.1 and has no -C.
+    'notebook_built_at': subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], cwd=str(ROOT),
                                         capture_output=True, text=True).stdout.strip(),
     'seeds': '0 everywhere; 1 for the two CIFAR-10 repeat runs',
     'nsamples': 500, 'isc_splits': 5, 'genbatch': '50 (20 or 10 for the large-window reruns)',
@@ -473,6 +474,31 @@ Every one of them is far above the uniform curve, which interpolated to NN-RMS 0
 opposite** (5.17 → 4.94, all below the uniform curve's ≈5.2): the third time in this sweep that
 IS and FID disagree, and I recorded the family as negative off the IS numbers before the FID
 landed.
+
+Repeating the sweep at the *champion's* level rather than at $m=2$ settles what $\gamma$ is
+actually doing. At $m=2.5$ ($k_{geo}=18.8$, against the ramp's 18.5):
+
+| $\gamma$ | $k_0/k_{max}$ | NN-RMS | IS ↑ | FID ↓ | copies |
+|---|---|---|---|---|---|
+| 0.90 | 9/39 | 0.231 | 6.99 | 73.0 | 0.058 |
+| 0.75 | 9/35 | 0.248 | 6.49 | 80.4 | 0.012 |
+| 0.60 | 11/31 | 0.262 | 6.23 | **85.5** | 0.004 |
+| 0.45 | 13/27 | 0.275 | 5.86 | 88.1 | 0.002 |
+
+$\gamma=0.60$ at $m=2.5$ reproduces the ramp 3.4→1.6 schedule to within a pixel at both ends
+($k_0$ 11, $k_{max}$ 31, $k_{geo}$ 18.9 against 11/31/18.5) and reproduces its metrics (FID 85.5 at
+NN-RMS 0.262, against 83.3 at 0.267). So **(level, compression) is the right parameterization and
+the hand-tuned ramp was a point inside it all along** — which is the useful part of this result,
+because it replaces a two-endpoint hand-tune with one knob for *where* you sit on the frontier and
+one for *how* the width is distributed.
+
+What it does not do is move the frontier. The $\gamma$ curve at fixed level traces the same
+FID-vs-NN-RMS trade-off as the down-ramp family — marginally below it in the middle, above it at
+the de-memorized end ($\gamma=0.45$: 88.1 at 0.275, against ≈92 interpolated for the ramps and ≈97
+for uniform) — and nothing in it displaces ramp 3.4→1.6 at zero copies. The gap that *is* robust
+is between shape *classes*: compressed and tilted schedules sit 7–10 FID below uniform and flat at
+every matched training-set distance, in two independent parameterizations. That gap, not which
+family draws it, is the transferable result.
 
 **8. Neither end of the schedule is a free knob on its own.** The $k_{geo}$/$k_{max}$ table
 suggested memorization tracks the schedule's *peak* window, which would make the low-noise end
