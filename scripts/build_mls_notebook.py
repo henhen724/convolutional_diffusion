@@ -455,11 +455,45 @@ worse — $k=17$ gives FID 99.0 at NN-RMS 0.268, against 94.0 for uniform ×2 an
 at the same distance. $k=23$ does beat uniform ×2.25 (76.5 at 0.237 vs 80.8 at 0.240) but already
 copies 4.4% of samples. Both limits of the shape family therefore fail — steepening (the up-ramp)
 and flattening — so the coarse-to-fine ordering earns its keep and the optimum is a *partial*
-compression of the base schedule. `--scale_gamma` scans exactly that: it raises the base windows
-to a power $\gamma$ about their geometric mean, so $\gamma=1$ is the uniform multiplier and
-$\gamma=0$ the flat schedule at the same level.
+compression of the base schedule.
 
-**7. The tilt transfers to CelebA and is neutral on MNIST.** Running the same 3.4→1.6 ramp
+**7. Compressing the schedule's range is a second, FID-only win.** `--scale_gamma` raises the base
+windows to a power $\gamma$ about their geometric mean, so $\gamma=1$ is exactly the uniform
+multiplier and $\gamma=0$ the flat schedule at the same level. At $m=2$:
+
+| $\gamma$ | 0.75 | 0.60 | 0.45 | 0.25 |
+|---|---|---|---|---|
+| NN-RMS | 0.288 | 0.289 | 0.291 | 0.290 |
+| IS ↑ | 5.17 | 5.15 | 5.02 | 4.94 |
+| FID ↓ | **101.8** | 103.6 | 105.3 | 110.1 |
+
+Every one of them is far above the uniform curve, which interpolated to NN-RMS 0.289 gives FID
+≈121 — compressing the range costs ≈430 FID per unit NN-RMS against the uniform multiplier's
+≈1400, so it is much the cheaper way to buy distance from the training set. **IS says the
+opposite** (5.17 → 4.94, all below the uniform curve's ≈5.2): the third time in this sweep that
+IS and FID disagree, and I recorded the family as negative off the IS numbers before the FID
+landed.
+
+**8. Neither end of the schedule is a free knob on its own.** The $k_{geo}$/$k_{max}$ table
+suggested memorization tracks the schedule's *peak* window, which would make the low-noise end
+free quality. It does not: at fixed peak ($m_1=1.6$), raising $m_0$ from 3.4 to 4.5 to 6.0 drives
+NN-RMS 0.267 → 0.235 → 0.163 and copies 0.2% → 5.4% → 31%. And at matched memorization the
+single-ended pushes lose to the balanced ramp:
+
+| schedule | NN-RMS | IS ↑ | FID ↓ | copies |
+|---|---|---|---|---|
+| ramp 4.5→1.6 (low-noise end up) | 0.235 | 6.60 | 73.4 | 0.054 |
+| ramp 3.4→2.0 (peak up) | 0.238 | 6.93 | 73.9 | 0.042 |
+| ramp 4.2→1.8 (both) | 0.236 | **7.20** | **71.0** | 0.092 |
+| flat k=23 | 0.237 | 6.86 | 76.5 | 0.044 |
+| uniform ×2.25 | 0.240 | 6.80 | 80.8 | 0.028 |
+
+Both single-ended pushes still beat flat and uniform on FID, and at matched *copy fraction* they
+beat 4.2→1.8 as well, but nothing here displaces **ramp 3.4→1.6 as the zero-copy operating
+point**. Together with the super-additivity in point 4, the schedule behaves as one object: the
+ends have to move together.
+
+**9. The tilt transfers to CelebA and is neutral on MNIST.** Running the same 3.4→1.6 ramp
 unchanged on the other two datasets:
 
 | dataset | schedule | NN-RMS | IS ↑ | FID ↓ | copies |
@@ -476,7 +510,7 @@ gives ≈16.8 with ≈24% copies, so it is on the uniform frontier, not above it
 uninformative throughout (its whole FID range is 19.0→15.8 against a real-image floor of 12.2), so
 this is weak evidence either way rather than a counterexample.
 
-**8. The barrier does find a sensible schedule.** Nothing imposes one, yet the selected layer-2
+**10. The barrier does find a sensible schedule.** Nothing imposes one, yet the selected layer-2
 window runs from the full image at high noise down to $k=0$ (layer 2 off) at low noise (Figure 3).
 The coarse-to-fine ordering is a real finding even though the layer-2 update rule is not worth its
 cost.

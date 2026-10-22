@@ -1,0 +1,27 @@
+1.  The entropy-barrier multilayer layer does not pay off.  It is dominated by
+    plain LS with wider windows at every matched memorization level, on both
+    metrics.  Layer 2's weights sum to 1, so it *replaces* layer 1's estimate
+    rather than refining it.  (hshunt is re-deriving the layer-2 posterior.)
+
+2.  The result came from the control: the per-step window schedule, not the
+    layer count, moves the metrics.  Uniform x2 takes CIFAR-10 FID 189 -> 94,
+    CelebA 128 -> 79, MNIST 19.0 -> 17.0, all with zero training-set copies.
+
+3.  And the schedule's *shape* beats its width.  Ramping the multiplier down
+    from 3.4 at t=0 to 1.6 at t=1 beats uniform x2 at matched memorization and
+    zero copies: CIFAR-10 FID 83/86 vs 94/93 over two seeds, CelebA 70 vs 79.
+    This is the current operating point.
+
+4.  Three controls bound the mechanism, and all three fail.  Up-ramp: worse
+    than uniform.  Flat schedule: no better, worse at the zero-copy point.
+    Pushing either end alone: still beats uniform, but loses to the balanced
+    ramp.  The schedule behaves as one object -- the ends move together.
+
+5.  Compressing the schedule's dynamic range is a second, FID-only win:
+    FID 102 at NN-RMS 0.289 against ~121 for uniform at the same distance,
+    while IS reads it as a loss.  IS and FID disagreed three times here; FID
+    is the one to trust, since IS has almost no range on CelebA or MNIST.
+
+6.  Next: fit the per-step schedule directly against FID under a zero-copy
+    constraint.  For ImageNet the candidate search is already O(1) in image
+    size; the blocker is the full pass over the training set at every step.
