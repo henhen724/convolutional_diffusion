@@ -17,14 +17,12 @@ down to ×1.6 at t=1** (below, at 20 steps, vs uniform ×2 at matched memorizati
 
 ~9 FID at matched distance, zero copies, vs a ~2.8 FID seed spread. MNIST is flat
 (16.6/17.0, floor 12.2) and EBMLS dominated (IS 3.30 vs 2.78, FID 201/189).
-**Six shape controls now bound the mechanism and all fail** (detail in the notebook):
-up-ramp, flat, single-ended pushes, and both axes of the (level, compression)
-parameterization. Each trades memorization for quality along one frontier.
+**Six shape controls bound the mechanism and all fail** (notebook): up-ramp, flat,
+single-ended pushes, both axes of (level, compression) — each trading along one frontier.
 
-**Step count is the first knob that leaves that frontier, and today's win**
-(`2026-10-22c,d/`). `--nsteps` resamples the window-vs-t curve onto more steps, holding
-the window at each noise level fixed. Seed-matched, 60 steps beats the 20-step champion
-on IS, FID *and* median training-set distance at once:
+**Step count is the first knob that leaves that frontier, and today's win** (`2026-10-22c,d/`).
+`--nsteps` resamples the window-vs-t curve onto more steps with the window at each noise level
+fixed. Seed-matched, 60 steps beats 20 on IS, FID *and* training-set distance at once:
 
 | steps | seed | NN-RMS | IS | FID | copies |
 |---|---|---|---|---|---|
@@ -39,7 +37,10 @@ and triples the IS split spread — and costs 5.8× the generation time of 20 st
 
 ## Running jobs
 
-- None.
+- 49028331 → `2026-10-22e/` (FID follows as 49028338): re-tune the window schedule at 60
+  steps, where it was never fitted: uniform ×2 as the shape control, plus the ramp at level
+  +15% and +30% (×3.9→1.84, ×4.4→2.08). Hypothesis: 60 steps freed ~0.013 of NN-RMS, so a
+  wider schedule spends it and beats FID 83.3 at NN-RMS 0.267 — i.e. the frontier moved.
 
 ## Open problems
 
