@@ -266,7 +266,9 @@ def main():
 		'temperature': args.temperature, 'nsamples': int(samples.shape[0]),
 		'scale_multiplier': args.scale_multiplier, 'mult_half': args.mult_half,
 		'scale_multiplier_hi': args.scale_multiplier_hi, 'flat_k': args.flat_k,
-		'scale_gamma': args.scale_gamma, 'nsteps': len(scales),
+		# The seed was only recoverable from the Slurm submit line, which outlives neither the
+		# job record nor a summary; record it so a replicate can be told from a rerun.
+		'scale_gamma': args.scale_gamma, 'nsteps': len(scales), 'seed': args.seed,
 		'IS_mean': float(isc['inception_score_mean']), 'IS_std': float(isc['inception_score_std']),
 		'nn_rms_median': None if nn_rms is None else float(nn_rms.median()),
 		'copy_fraction': None if nn_rms is None else float((nn_rms < args.copy_rms).float().mean()),

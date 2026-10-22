@@ -20,15 +20,20 @@
     shape *classes* -- compressed and tilted sit 7-10 FID below uniform and
     flat at every matched distance, in two independent parameterizations.
 
-5.  Step count is the first knob that leaves that frontier.  Every run until
-    today took 20 steps, because the sampler takes one per window entry.
-    Resampling the champion schedule onto 60 steps -- same window at every
-    noise level, finer integration -- gives CIFAR-10 FID 83.3 -> 78.8 and
-    IS 6.44 -> 6.75 while the median distance to the training set *grows*.
-    Caveat: IS is non-monotone, +0.31 is one split-spread, and the copy tail
-    rises 0.2% -> 1.6%.  A seed replicate is running; FID is the solid part.
+5.  Step count is the first knob that leaves that frontier, and it is the
+    day's result.  Every run until today took 20 steps, because the sampler
+    takes one per window entry.  Resampling the champion schedule onto 60 --
+    same window at every noise level, finer integration -- gives CIFAR-10
+    IS 6.75/6.75 vs 6.44/6.31 and FID 78.8/80.0 vs 83.3/86.1 over the same
+    two seeds, while the median distance to the training set *grows*.  Both
+    seeds beat the better 20-step one, so the IS gain replicates.
 
-6.  Next: re-tune the window schedule at the better step count, then stop
-    fitting shapes.  The ImageNet blocker is not the candidate search, which
-    is already O(1) in image size, but the full pass over the training set at
-    every step -- and more steps multiply exactly that cost.
+6.  It saturates at 60.  100 steps leaves FID flat (78.9), drops IS to 6.63
+    and triples its split spread, at 5.8x the generation time of 20 steps.
+    The one number going the wrong way is the copy tail: 0.2% -> 1.6% at
+    seed 0, though seed 1 halves that, so call it noisy and watch it.
+
+7.  Next: re-tune the window schedule at 60 steps, where it was never
+    fitted, then stop fitting shapes.  The ImageNet blocker is not the
+    candidate search, which is already O(1) in image size, but the full pass
+    over the training set at every step -- and steps now cost 3x more.

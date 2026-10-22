@@ -70,6 +70,12 @@ Each run additionally reports **FID and KID**, added after the fact from the sav
 (real images score 3.31) or MNIST (1.92), because an ImageNet classifier has nothing to say about
 faces or digits, so "no IS change" on those datasets is unreadable. FID compares feature
 *distributions* against the real data and stays informative. It changed a conclusion — see below.
+
+One axis is not a window at all. The sampler takes one step per entry of the window schedule, so
+every run before 2026-10-22 integrated the reverse process in exactly 20 steps; `--nsteps`
+resamples the schedule onto a finer grid, holding the window fixed at each *noise level*. It is the
+only knob here that does not widen the posterior, and the only one that has moved both metrics the
+same way at once (conclusion 10).
 '''))
 
 CELLS.append(md('## Load every run'))
@@ -90,7 +96,8 @@ for f in sorted(RES.glob('2026-10-2*/*/metrics.json')):
     m = json.load(open(f))
     m['run'], m['dir'] = f.parent.name, f.parent
     m['mult'] = m.get('scale_multiplier') or 1.0
-    m['seed'] = 1 if f.parent.name.endswith('seed1') else 0
+    # Runs from 2026-10-22d on record the seed; before that it is only in the directory name.
+    m['seed'] = m.get('seed', 1 if f.parent.name.endswith('seed1') else 0)
     half = '' if m.get('mult_half', 'all') in (None, 'all') else f", {m['mult_half']}-noise half only"
     m['hi'] = m.get('scale_multiplier_hi')
     m['flat'], m['gamma'] = m.get('flat_k'), m.get('scale_gamma')
@@ -378,7 +385,7 @@ print(json.dumps({
     # cwd=, not `git -C`: the stock Sherlock git is 1.8.3.1 and has no -C.
     'notebook_built_at': subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], cwd=str(ROOT),
                                         capture_output=True, text=True).stdout.strip(),
-    'seeds': '0 everywhere; 1 for the two CIFAR-10 repeat runs',
+    'seeds': '0 everywhere; 1 for the three CIFAR-10 repeat runs (x1, x2, and the 60-step ramp)',
     'nsamples': 500, 'isc_splits': 5, 'genbatch': '50 (20 or 10 for the large-window reruns)',
     'scorebatchsize': '512 (128 or 64 for the large-window reruns)',
     'schedule': 'cosine', 'temperature': 1.0, 'barrier_mode': 'image',
@@ -557,25 +564,37 @@ curve onto more steps (exact at 20, and on the champion ramp it holds $k_0=11$ a
 with $k_{geo}$ drifting only 18.5 → 19.0 → 19.2 from odd-rounding), so the window at each *noise
 level* is unchanged and only the trajectory's resolution differs:
 
-| steps | NN-RMS | IS ↑ | FID ↓ | copies | gen s |
-|---|---|---|---|---|---|
-| 20 (champion) | 0.267 | 6.44 ± 0.31 | 83.3 | 0.002 | 311 |
-| 40 | 0.279 | 6.31 ± 0.27 | 82.3 | 0.010 | 1180 |
-| **60** | **0.280** | **6.75 ± 0.34** | **78.8** | 0.016 | 1798 |
+| steps | seed | NN-RMS | IS ↑ | FID ↓ | copies | gen s |
+|---|---|---|---|---|---|---|
+| 20 (champion) | 0 | 0.267 | 6.44 ± 0.31 | 83.3 | 0.002 | 311 |
+| 20 | 1 | 0.270 | 6.31 | 86.1 | ~0 | 311 |
+| 40 | 0 | 0.279 | 6.31 ± 0.27 | 82.3 | 0.010 | 1180 |
+| **60** | **0** | **0.280** | **6.75 ± 0.34** | **78.8** | 0.016 | 1798 |
+| **60** | **1** | **0.284** | **6.75 ± 0.34** | **80.0** | 0.008 | 1799 |
+| 100 | 0 | 0.286 | 6.63 ± 0.62 | 78.9 | 0.014 | 2996 |
 
-**FID falls monotonically while the median sample moves *further* from the training set** — 78.8 at
-NN-RMS 0.280, against the champion's 83.3 at 0.267. No shape knob has done that; every one of them
-bought FID by moving closer. That is the signature of leaving the frontier rather than sliding
+**Both metrics improve while the median sample moves *further* from the training set** — FID 78.8
+at NN-RMS 0.280, against the champion's 83.3 at 0.267. No shape knob has done that; every one of
+them bought FID by moving closer. That is the signature of leaving the frontier rather than sliding
 along it, and it is the mechanism one would expect: more steps integrate the same score field more
 finely instead of widening the posterior at any noise level.
 
-Two things keep this from being a finished claim. IS is **not** monotone — 40 steps dips to 6.31 —
-and the +0.31 from 20 to 60 is about one split spread, so IS alone would not carry it; FID, which
-has been the more reliable of the two throughout this sweep, is what makes the case. And the
-**copy tail grows** (0.2% → 1.0% → 1.6%) even as the median distance grows, so more steps move most
-samples away from the training set while pushing a few onto it — unexplained, and the thing to
-watch if the step count goes higher. A seed-1 replicate at 60 steps and a 100-step run are in
-flight; until they land, treat IS 6.75 as suggestive and FID 78.8 as the result.
+**The IS gain replicates.** Seed 1 at 60 steps lands on IS 6.75 as well — the two seeds agree to
+0.01, while at 20 steps they sit at 6.44 and 6.31 — so the seed-matched comparison is 6.75/6.75
+against 6.44/6.31, a gain of +0.37 against a 0.13 seed spread, and both 60-step seeds beat the
+better 20-step one. FID agrees across seeds too (78.8/80.0 vs 83.3/86.1). IS is nonetheless **not**
+monotone in step count: 40 steps dips to 6.31, so the curve is not something to extrapolate.
+
+**60 steps is where it saturates, and the gain is bought with compute.** Going to 100 steps leaves
+FID flat (78.9 vs 78.8), drops IS to 6.63, and triples its split spread to ±0.62 — so the useful
+range closes between 40 and 100, at 5.8× the generation time of 20 steps for 3× the steps (the
+per-step cost itself grows, since each step is a full pass over the training set).
+
+One thing is still unexplained: the **copy tail grows** (0.2% → 1.0% → 1.6% at seed 0) even as the
+median distance grows, so more steps move most samples away from the training set while pushing a
+few onto it. Seed 1 puts that tail at 0.8%, half of seed 0's, which makes it noisy at 500 samples
+rather than clearly a trend — but it is the thing to watch, because it is the one quantity moving
+in the wrong direction.
 
 **11. The tilt transfers to CelebA and is neutral on MNIST.** Running the same 3.4→1.6 ramp
 unchanged on the other two datasets:
