@@ -93,12 +93,18 @@ for f in sorted(RES.glob('2026-10-2*/*/metrics.json')):
     half = '' if m.get('mult_half', 'all') in (None, 'all') else f", {m['mult_half']}-noise half only"
     m['hi'] = m.get('scale_multiplier_hi')
     m['flat'], m['gamma'] = m.get('flat_k'), m.get('scale_gamma')
+    # Runs before --nsteps existed have no such key and all took 20 steps.
+    m['nsteps'] = m.get('nsteps') or 20
     # Each schedule *shape* is its own family with its own frontier curve: up- and down-ramps
     # move in opposite directions, and the flat and gamma runs carry scale_multiplier 1.0 and
     # 2.0, so without this they would be read as plain uniform runs at those multipliers.
-    m['family'] = ('LSflat' if m['flat'] else 'LSgamma' if m['gamma'] is not None else
+    # Step count is checked first and likewise: those runs carry the champion ramp's own
+    # multipliers, so they would otherwise be read as extra points on the ramp curve.
+    m['family'] = ('LSsteps' if m['nsteps'] != 20 else
+                   'LSflat' if m['flat'] else 'LSgamma' if m['gamma'] is not None else
                    ('LSramp_down' if m['mult'] > m['hi'] else 'LSramp_up') if m['hi'] else m['method'])
     m['config'] = ('real images' if m['method'] == 'real' else
+                   f"LS (ramp, {m['nsteps']} steps)" if m['nsteps'] != 20 else
                    f"LS (flat k={m['flat']})" if m['flat'] else
                    f"LS (gamma {m['gamma']:g} at x{m['mult']:g})" if m['gamma'] is not None else
                    f"LS (ramp x{m['mult']:g}→x{m['hi']:g})" if m['hi'] else
@@ -137,7 +143,7 @@ the nearest training image in normalized pixel units (**higher = less like the t
 
 CELLS.append(code(r'''
 ORDER = {'real': 0, 'LS': 1, 'LSramp_down': 2, 'LSramp_up': 3, 'LSgamma': 4, 'LSflat': 5,
-         'MLS': 6, 'EBMLS': 7}
+         'LSsteps': 6, 'MLS': 7, 'EBMLS': 8}
 hdr = (f"{'dataset':8s} {'configuration':24s} {'seed':>4s} {'IS ↑':>14s} {'FID ↓':>7s} "
        f"{'KID ↓':>7s} {'NN-RMS':>7s} {'copy':>6s}")
 print(hdr + '\n' + '-' * len(hdr))
@@ -195,6 +201,7 @@ for col, d in enumerate(DSETS):
                                 ('LSramp_up', 'C9', 'v-', 'LS (ramp up)'),
                                 ('LSgamma', 'C4', '^-', 'LS (gamma: compressed range)'),
                                 ('LSflat', 'C1', 'x-', 'LS (flat = gamma 0)'),
+                                ('LSsteps', 'C2', '*-', 'LS (champion ramp, more steps)'),
                                 ('EBMLS', 'C3', 's-', 'EBMLS (barrier)')]:
             s = [r for r in sorted(sel(dataset=d, family=fam), key=lambda r: r['nn_rms_median'])
                  if r.get(ykey) is not None]
@@ -267,10 +274,12 @@ FID-vs-memorization frontier, against the uniform family.
 
 CELLS.append(code(r'''
 fig, axes = plt.subplots(1, 2, figsize=(12, 4.4))
-COLOUR = {'LS': 'k', 'LSramp_down': 'C0', 'LSramp_up': 'C9', 'LSgamma': 'C4', 'LSflat': 'C1'}
+COLOUR = {'LS': 'k', 'LSramp_down': 'C0', 'LSramp_up': 'C9', 'LSgamma': 'C4', 'LSflat': 'C1',
+          'LSsteps': 'C2'}
 show = (sel(dataset='cifar10', family='LS', mult=1.0) + sel(dataset='cifar10', family='LS', mult=2.0)
         + sel(dataset='cifar10', family='LSramp_down') + sel(dataset='cifar10', family='LSramp_up')
-        + sel(dataset='cifar10', family='LSgamma') + sel(dataset='cifar10', family='LSflat'))
+        + sel(dataset='cifar10', family='LSgamma') + sel(dataset='cifar10', family='LSflat')
+        + sel(dataset='cifar10', family='LSsteps'))
 for r in show:
     k = r['scales']
     axes[0].plot(np.arange(len(k)) / (len(k) - 1), k, marker='.',
@@ -281,7 +290,8 @@ axes[0].legend(fontsize=7); axes[0].set_title('window schedules')
 
 for fam, mk, lab in [('LS', 'o-', 'uniform'), ('LSramp_down', 'D-', 'ramp down'),
                      ('LSramp_up', 'v-', 'ramp up'), ('LSgamma', '^-', 'gamma-compressed'),
-                     ('LSflat', 'x-', 'flat (gamma 0)')]:
+                     ('LSflat', 'x-', 'flat (gamma 0)'),
+                     ('LSsteps', '*-', 'champion ramp, more steps')]:
     s = [r for r in sorted(sel(dataset='cifar10', family=fam), key=lambda r: r['nn_rms_median'])
          if r.get('FID') is not None]
     if s:

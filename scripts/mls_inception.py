@@ -146,6 +146,14 @@ def main():
 	# the overall window level fixed as gamma varies, so gamma moves the shape and
 	# --scale_multiplier moves the level, which is what has to be matched across memorization.
 	p.add_argument('--scale_gamma', type=float, default=None)
+	# The sampler takes one step per entry of the scales file, so every run so far has used
+	# exactly 20 steps -- a coarse integration of the reverse process, and the one axis that is
+	# orthogonal to the window schedule. Setting this resamples the window-vs-t curve onto a
+	# different number of steps, holding the window at each *noise level* fixed and changing
+	# only how finely the trajectory is integrated. Every shape knob above moves quality and
+	# memorization together along one frontier; step count is the candidate for moving quality
+	# alone, since it does not widen the posterior at any t.
+	p.add_argument('--nsteps', type=int, default=None)
 	p.add_argument('--barrier', type=float, default=2.0)
 	p.add_argument('--barrier_mode', choices=['image', 'pixel'], default='image')
 	p.add_argument('--temperature', type=float, default=1.0)
@@ -182,7 +190,23 @@ def main():
 		half = len(scales) // 2
 		lo, hi = (0, len(scales)) if args.mult_half == 'all' else (0, half) if args.mult_half == 'lo' else (half, len(scales))
 		scales = [_widen(s, args.scale_multiplier) if lo <= i < hi else s for i, s in enumerate(scales)]
-	print(f'dataset={args.dataset} method={args.method} conditional={conditional} scales={scales}', flush=True)
+
+	if args.nsteps is not None and args.nsteps != len(scales):
+		# Resample after the shape transforms, so --nsteps composes with all of them and the
+		# schedule it resamples is the one that would otherwise have run. The sampler uses
+		# scales[i] at t = i/nsteps, so t -- not the index -- is what has to be preserved:
+		# map step j of the new grid to position (j/nsteps)*n0 in the old one and interpolate
+		# linearly, which keeps every window attached to the noise level it was chosen for.
+		n0 = len(scales)
+		resampled = []
+		for j in range(args.nsteps):
+			u = j * n0 / args.nsteps
+			i0 = min(int(u), n0 - 1)
+			i1 = min(i0 + 1, n0 - 1)
+			k = scales[i0] + (scales[i1] - scales[i0]) * (u - i0)
+			resampled.append(min(2 * size - 1, max(1, int(round(k)) | 1)))
+		scales = resampled
+	print(f'dataset={args.dataset} method={args.method} conditional={conditional} nsteps={len(scales)} scales={scales}', flush=True)
 
 	common = dict(image_size=size, batch_size=args.scorebatchsize, schedule=cosine_noise_schedule, max_samples=args.max_samples)
 	if args.method == 'LS':
@@ -242,7 +266,7 @@ def main():
 		'temperature': args.temperature, 'nsamples': int(samples.shape[0]),
 		'scale_multiplier': args.scale_multiplier, 'mult_half': args.mult_half,
 		'scale_multiplier_hi': args.scale_multiplier_hi, 'flat_k': args.flat_k,
-		'scale_gamma': args.scale_gamma,
+		'scale_gamma': args.scale_gamma, 'nsteps': len(scales),
 		'IS_mean': float(isc['inception_score_mean']), 'IS_std': float(isc['inception_score_std']),
 		'nn_rms_median': None if nn_rms is None else float(nn_rms.median()),
 		'copy_fraction': None if nn_rms is None else float((nn_rms < args.copy_rms).float().mean()),

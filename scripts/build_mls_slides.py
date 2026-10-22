@@ -43,16 +43,21 @@ def load():
 		m['hi'] = m.get('scale_multiplier_hi')
 		m['flat'] = m.get('flat_k')
 		m['gamma'] = m.get('scale_gamma')
+		m['nsteps'] = m.get('nsteps') or 20  # runs predating --nsteps all took 20
 		# Every schedule *shape* is its own family: a shape is not a different point on the
 		# uniform frontier, so each gets its own curve.  Flat and gamma runs in particular
 		# carry scale_multiplier 1.0 and 2.0, so without this they would be plotted and
 		# tabulated as if they were plain uniform runs at those multipliers.
 		# Up- and down-ramps are separate families too: they move in opposite directions, so a
 		# single curve through both would zig-zag rather than trace a frontier.
-		m['family'] = ('LSflat' if m['flat'] else 'LSgamma' if m['gamma'] is not None else
+		# Step count is checked first: those runs carry the champion ramp's own multipliers,
+		# so they would otherwise be plotted as extra points on the ramp curve.
+		m['family'] = ('LSsteps' if m['nsteps'] != 20 else
+		               'LSflat' if m['flat'] else 'LSgamma' if m['gamma'] is not None else
 		               ('LSramp_down' if m['mult'] > m['hi'] else 'LSramp_up') if m['hi'] else m['method'])
 		h = '' if m['half'] == 'all' else f", {m['half']}-noise half"
 		m['config'] = ('real images' if m['method'] == 'real' else
+		               f"LS (ramp, {m['nsteps']} steps)" if m['nsteps'] != 20 else
 		               f"LS (flat k={m['flat']})" if m['flat'] else
 		               f"LS (γ={m['gamma']:g} at x{m['mult']:g})" if m['gamma'] is not None else
 		               f"LS (ramp x{m['mult']:g}→x{m['hi']:g})" if m['hi'] else
@@ -93,7 +98,7 @@ def table_page(pdf, runs):
 	         ha='center', size=11, color='.35')
 	cols = ['dataset', 'config', 'seed', 'IS', 'FID', 'NN-RMS', 'copy frac']
 	order = {'real': 0, 'LS': 1, 'LSramp_down': 2, 'LSramp_up': 3, 'LSgamma': 4, 'LSflat': 5,
-	         'MLS': 6, 'EBMLS': 7}
+	         'LSsteps': 6, 'MLS': 7, 'EBMLS': 8}
 	body, colours = [], []
 	for r in sorted(runs, key=lambda r: (r['dataset'], order[r['family']], r['mult'], r['barrier'] or 0,
 	                                     r['half'], r['seed'])):
@@ -143,6 +148,7 @@ def frontier_page(pdf, runs, dsets, ykey, ylab, title):
 		                         ('LSramp_up', 'C9', 'v-', 'LS (ramp up)'),
 		                         ('LSgamma', 'C4', '^-', 'LS (γ: compressed range)'),
 		                         ('LSflat', 'C1', 'x-', 'LS (flat, γ=0)'),
+		                         ('LSsteps', 'C2', '*-', 'LS (champion ramp, more steps)'),
 		                         ('EBMLS', 'C3', 's-', 'EBMLS (barrier)')]:
 			s = [r for r in curve(runs, d, meth) if r.get(ykey) is not None]
 			if not s:
@@ -194,11 +200,13 @@ def shape_page(pdf, runs):
 	down = curve(runs, 'cifar10', 'LSramp_down')
 	if not down:
 		return
-	colour = {'LS': 'k', 'LSramp_down': 'C0', 'LSramp_up': 'C9', 'LSgamma': 'C4', 'LSflat': 'C1'}
+	colour = {'LS': 'k', 'LSramp_down': 'C0', 'LSramp_up': 'C9', 'LSgamma': 'C4', 'LSflat': 'C1',
+	          'LSsteps': 'C2'}
 	show = ([r for r in runs if r['dataset'] == 'cifar10' and r['family'] == 'LS'
 	         and r['seed'] == 0 and r['half'] == 'all' and r['mult'] in (1.0, 2.0)]
 	        + down + curve(runs, 'cifar10', 'LSramp_up')
-	        + curve(runs, 'cifar10', 'LSgamma') + curve(runs, 'cifar10', 'LSflat'))
+	        + curve(runs, 'cifar10', 'LSgamma') + curve(runs, 'cifar10', 'LSflat')
+	        + curve(runs, 'cifar10', 'LSsteps'))
 	fig, axes = plt.subplots(1, 2, figsize=FIGSIZE)
 	fig.suptitle('Tilting the schedule beats widening it uniformly', weight='bold')
 	for r in show:
@@ -210,7 +218,8 @@ def shape_page(pdf, runs):
 	axes[0].legend(fontsize=8); axes[0].set_title('window schedules')
 	for fam, mk, lab in [('LS', 'o-', 'uniform'), ('LSramp_down', 'D-', 'ramp down'),
 	                     ('LSramp_up', 'v-', 'ramp up'), ('LSgamma', '^-', 'γ-compressed'),
-	                     ('LSflat', 'x-', 'flat (γ=0)')]:
+	                     ('LSflat', 'x-', 'flat (γ=0)'),
+	                     ('LSsteps', '*-', 'champion ramp, more steps')]:
 		s = [r for r in curve(runs, 'cifar10', fam) if r.get('FID') is not None]
 		if not s:
 			continue
