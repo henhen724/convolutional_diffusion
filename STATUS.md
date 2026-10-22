@@ -54,6 +54,6 @@ and triples the IS split spread — and costs 5.8× the generation time of 20 st
 
 ## Next steps
 
-1. Re-tune the window schedule at 60 steps — the ramp was fitted at 20 and need not still win; the shape-vs-step interaction is untested.
+1. **Confound for the step-count win:** the 20-step champion's schedule is non-monotone — `[11,11,11,9,15,...]`, four dips, from rounding `base(t)*mult(t)` to odd — and resampling dilutes each dip over 3× as many steps. So "finer integration" and "smoother schedule" are not separated. Test with a monotonized (cumulative-max) schedule at 20 steps; needs a flag in `mls_inception.py`, so not while 49028331 runs on it.
 2. Additive residual layer 2, once the corrected posterior lands.
 3. ImageNet: candidates cost O(1) in resolution, but the per-step pass over the train set scales with N (ANN search), and 60 steps multiplies that by 3.
