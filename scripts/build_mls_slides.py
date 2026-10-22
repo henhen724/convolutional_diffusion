@@ -277,14 +277,25 @@ def verdict_page(pdf, text):
 	# page.  Paginate instead of shrinking the font: hshunt reads these on a phone, so losing
 	# the last point and dropping to a 6pt font are both worse than a second page.  Points are
 	# separated by blank lines, so pack whole points onto each page, never splitting one.
+	# Greedy packing leaves the last page holding a single point once the text grows past a
+	# page boundary (14/14/4 lines, say).  So pack twice: once at the height the page can
+	# actually hold, to learn the minimum number of pages, then again at the smallest cap that
+	# still fits in that many -- which spreads the points evenly instead of filling from the top.
+	points = text.strip('\n').split('\n\n')
+	sizes = [p.count('\n') + 2 for p in points]
+
+	def pack(cap):
+		pages, cur, used = [], [], 0
+		for i, n in enumerate(sizes):
+			if cur and used + n - 1 > cap:
+				pages.append(cur); cur, used = [], 0
+			cur.append(points[i]); used += n
+		return pages + [cur]
+
 	per_page = int(.74 * FIGSIZE[1] * 72 / (12.5 * 1.8))
-	pages, cur = [], []
-	for point in text.strip('\n').split('\n\n'):
-		n = point.count('\n') + 1
-		if cur and sum(p.count('\n') + 2 for p in cur) + n > per_page:
-			pages.append(cur); cur = []
-		cur.append(point)
-	pages.append(cur)
+	target = len(pack(per_page))
+	cap = next(c for c in range(max(sizes) - 1, per_page + 1) if len(pack(c)) <= target)
+	pages = pack(cap)
 	for i, page in enumerate(pages):
 		fig = plt.figure(figsize=FIGSIZE)
 		title = 'Where this leaves us' + (f' ({i + 1}/{len(pages)})' if len(pages) > 1 else '')

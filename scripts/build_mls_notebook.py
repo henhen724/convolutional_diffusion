@@ -30,8 +30,9 @@ CELLS = []
 CELLS.append(md(r'''
 # Multilayer local score with an entropy-barrier window: does it raise Inception Score?
 
-**Run:** 2026-10-21, commit `2c2dc90` (+ `--scale_multiplier` control, commit noted in the
-config cell below). Seed 0, 500 samples per configuration, Inception Score over 5 splits.
+**Run:** 2026-10-21 / 2026-10-22, model code at commit `2c2dc90` (the harness commit is printed
+in the config cell below). Seed 0 unless noted, 500 samples per configuration, Inception Score
+over 5 splits, FID against the full training set.
 
 ### The model
 
@@ -529,7 +530,54 @@ beat 4.2→1.8 as well, but nothing here displaces **ramp 3.4→1.6 as the zero-
 point**. Together with the super-additivity in point 4, the schedule behaves as one object: the
 ends have to move together.
 
-**9. The tilt transfers to CelebA and is neutral on MNIST.** Running the same 3.4→1.6 ramp
+**9. The level axis at weak compression just reproduces the uniform curve, which closes the
+shape search.** The complement of point 7: hold the compression at $\gamma=0.90$ and sweep the
+level instead.
+
+| $m$ at $\gamma=0.90$ | NN-RMS | IS ↑ | FID ↓ | copies |
+|---|---|---|---|---|
+| 2.35 | 0.248 | 6.35 | 80.6 | 0.020 |
+| 2.20 | 0.268 | 5.88 | 94.4 | 0.000 |
+| 2.05 | 0.277 | 5.61 | 98.3 | 0.000 |
+
+At $m=2.20$ the distance to the training set matches the champion's almost exactly (0.268 against
+0.267) and **both metrics are worse — IS 5.88 against 6.44, FID 94.4 against 83.3.** The
+prediction was that dropping the level from $m=2.5$ would walk $\gamma=0.90$'s FID 73.0 back to
+zero copies and beat the champion; instead it walks straight onto the *uniform* curve (uniform ×2
+gives FID 94.0 at NN-RMS 0.270). In hindsight that is what $\gamma=0.90$ has to do, since
+$\gamma=1$ *is* the uniform multiplier: compression has to be well below 1 to leave the uniform
+frontier at all, and the champion's effective $\gamma\approx0.60$ already sits near the useful end
+of that range. Six shape controls have now failed, every one of them trading memorization for
+quality along a single frontier, so the schedule's *shape* is finished as a source of gains.
+
+**10. Step count is the first knob that leaves the frontier.** The sampler takes one step per
+entry of the scales file, so every run above used exactly 20 — a coarse integration of the reverse
+process, and the one axis orthogonal to the window schedule. `--nsteps` resamples the window-vs-$t$
+curve onto more steps (exact at 20, and on the champion ramp it holds $k_0=11$ and $k_{max}=31$
+with $k_{geo}$ drifting only 18.5 → 19.0 → 19.2 from odd-rounding), so the window at each *noise
+level* is unchanged and only the trajectory's resolution differs:
+
+| steps | NN-RMS | IS ↑ | FID ↓ | copies | gen s |
+|---|---|---|---|---|---|
+| 20 (champion) | 0.267 | 6.44 ± 0.31 | 83.3 | 0.002 | 311 |
+| 40 | 0.279 | 6.31 ± 0.27 | 82.3 | 0.010 | 1180 |
+| **60** | **0.280** | **6.75 ± 0.34** | **78.8** | 0.016 | 1798 |
+
+**FID falls monotonically while the median sample moves *further* from the training set** — 78.8 at
+NN-RMS 0.280, against the champion's 83.3 at 0.267. No shape knob has done that; every one of them
+bought FID by moving closer. That is the signature of leaving the frontier rather than sliding
+along it, and it is the mechanism one would expect: more steps integrate the same score field more
+finely instead of widening the posterior at any noise level.
+
+Two things keep this from being a finished claim. IS is **not** monotone — 40 steps dips to 6.31 —
+and the +0.31 from 20 to 60 is about one split spread, so IS alone would not carry it; FID, which
+has been the more reliable of the two throughout this sweep, is what makes the case. And the
+**copy tail grows** (0.2% → 1.0% → 1.6%) even as the median distance grows, so more steps move most
+samples away from the training set while pushing a few onto it — unexplained, and the thing to
+watch if the step count goes higher. A seed-1 replicate at 60 steps and a 100-step run are in
+flight; until they land, treat IS 6.75 as suggestive and FID 78.8 as the result.
+
+**11. The tilt transfers to CelebA and is neutral on MNIST.** Running the same 3.4→1.6 ramp
 unchanged on the other two datasets:
 
 | dataset | schedule | NN-RMS | IS ↑ | FID ↓ | copies |
@@ -546,7 +594,7 @@ gives ≈16.8 with ≈24% copies, so it is on the uniform frontier, not above it
 uninformative throughout (its whole FID range is 19.0→15.8 against a real-image floor of 12.2), so
 this is weak evidence either way rather than a counterexample.
 
-**10. The barrier does find a sensible schedule.** Nothing imposes one, yet the selected layer-2
+**12. The barrier does find a sensible schedule.** Nothing imposes one, yet the selected layer-2
 window runs from the full image at high noise down to $k=0$ (layer 2 off) at low noise (Figure 3).
 The coarse-to-fine ordering is a real finding even though the layer-2 update rule is not worth its
 cost.
