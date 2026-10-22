@@ -24,6 +24,7 @@ Example:
 
 import argparse
 import json
+import math
 import os
 import sys
 import time
@@ -137,6 +138,14 @@ def main():
 	# structure left at all. If flattening is what the down-ramp is buying, this should land
 	# on or above its frontier; if the schedule's ordering still matters, it should be worse.
 	p.add_argument('--flat_k', type=int, default=None)
+	# The down-ramp beats the uniform multiplier and the flat limit does not, so the optimal
+	# shape sits between them. This is the one-parameter interpolation of exactly those two:
+	# k_i = (m * k_geo) * (k_i / k_geo) ** gamma compresses the base schedule's dynamic range
+	# around its geometric mean, gamma=1 reproducing --scale_multiplier and gamma=0 --flat_k at
+	# m * k_geo. Compressing around the geometric mean rather than rescaling from one end keeps
+	# the overall window level fixed as gamma varies, so gamma moves the shape and
+	# --scale_multiplier moves the level, which is what has to be matched across memorization.
+	p.add_argument('--scale_gamma', type=float, default=None)
 	p.add_argument('--barrier', type=float, default=2.0)
 	p.add_argument('--barrier_mode', choices=['image', 'pixel'], default='image')
 	p.add_argument('--temperature', type=float, default=1.0)
@@ -163,6 +172,9 @@ def main():
 
 	if args.flat_k is not None:
 		scales = [min(2 * size - 1, args.flat_k | 1)] * len(scales)
+	elif args.scale_gamma is not None:
+		k_geo = math.exp(sum(math.log(s) for s in scales) / len(scales))
+		scales = [_widen(k_geo, args.scale_multiplier * (s / k_geo) ** args.scale_gamma) for s in scales]
 	elif args.scale_multiplier_hi is not None:
 		m0, m1, n = args.scale_multiplier, args.scale_multiplier_hi, len(scales)
 		scales = [_widen(s, m0 + (m1 - m0) * i / (n - 1)) for i, s in enumerate(scales)]
@@ -230,6 +242,7 @@ def main():
 		'temperature': args.temperature, 'nsamples': int(samples.shape[0]),
 		'scale_multiplier': args.scale_multiplier, 'mult_half': args.mult_half,
 		'scale_multiplier_hi': args.scale_multiplier_hi, 'flat_k': args.flat_k,
+		'scale_gamma': args.scale_gamma,
 		'IS_mean': float(isc['inception_score_mean']), 'IS_std': float(isc['inception_score_std']),
 		'nn_rms_median': None if nn_rms is None else float(nn_rms.median()),
 		'copy_fraction': None if nn_rms is None else float((nn_rms < args.copy_rms).float().mean()),
