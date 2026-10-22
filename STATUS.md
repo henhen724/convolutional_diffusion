@@ -18,9 +18,8 @@ Against uniform ×2 at matched memorization:
 | MNIST | 0.191/0.240 | 1.95/1.92 | 16.6/17.0 | 0.25/0.08 |
 
 ~9 FID at matched training-set distance and zero copies, vs a ~1 FID seed spread.
-MNIST is flat (uniform frontier; its whole FID range is 19.0→15.8 against a 12.2
-real floor). EBMLS stays dominated: barrier 1.0 wins on IS (3.30 vs 2.78), not
-FID (201 vs 189).
+MNIST is flat (uniform frontier; FID range 19.0→15.8 against a 12.2 real floor).
+EBMLS stays dominated: barrier 1.0 wins on IS (3.30 vs 2.78) but not FID (201/189).
 
 Both controls fail, bracketing the mechanism. **Up-ramp** is worse than uniform
 (1.4→2.6: FID 89.8 at NN-RMS 0.227 vs ≈77), so tilt *direction* matters and runs
@@ -28,12 +27,12 @@ against the coarse-to-fine intuition. But a **flat schedule** (`--flat_k`) sits 
 the *uniform* frontier, not the ramp's (k=17: IS 5.38 at 0.268 vs the ramp's 6.44;
 k=23: 6.86 at 0.237). The ordering still earns its keep; the optimum is between.
 
-`notebooks/mls_entropy_barrier_results.ipynb` + `2026-10-21_mls_entropy_barrier_slides.pdf`
-(sent to OneDrive); data in `results/mls_inception/2026-10-2{1,1b,1c,2}/`.
+`notebooks/mls_entropy_barrier_results.ipynb` + slides PDF (sent to OneDrive); data in `results/mls_inception/2026-10-2{1,1b,1c,1d,2}/`.
 
 ## Running jobs
 
 - 48915101 `add_fid.py`, the two flat-schedule runs, pending on `sganguli`; merges FID into their metrics.json only — rerun the builders once it lands.
+- 48921219 `--scale_gamma` scan, CIFAR-10 seed 0, gamma 0.75/0.60/0.45/0.25 at m=2.0 → `2026-10-21d/`. Gamma compresses the base schedule's dynamic range around its geometric mean: gamma=1 *is* uniform x2, gamma=0 is flat at the same level, so it interpolates the two shapes the controls bracketed. Hypothesis: FID at matched NN-RMS is best at intermediate gamma, beating uniform x2 (94.0 at NN-RMS 0.270).
 
 ## Open problems
 
@@ -52,8 +51,8 @@ k=23: 6.86 at 0.237). The ordering still earns its keep; the optimum is between.
 
 ## Next steps
 
-1. Fit the per-step schedule directly against FID under a zero-copy constraint;
-   the two-parameter ramp family is too coarse to reach the optimum.
+1. Once 48921219 lands: trace the winning gamma's own level frontier (vary m at
+   fixed gamma), then fit the per-step schedule directly against FID.
 2. Additive residual layer 2, once the corrected posterior lands.
 3. ImageNet: candidates cost the same at any resolution, but the per-step pass
    over the training set still scales with N (needs ANN search).
