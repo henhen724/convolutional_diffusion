@@ -30,6 +30,14 @@ The up-ramp is the control and fails (1.4→2.6: FID 89.8 at NN-RMS 0.227 vs ≈
 for the uniform curve there), so the tilt direction matters and runs *against*
 the coarse-to-fine intuition.
 
+**But flattening is not the mechanism.** The limit of the down-ramp — a flat
+schedule, same window at every step (`--flat_k`) — lands *on* the uniform
+frontier, not the ramp's: k=17 gives IS 5.384 at NN-RMS 0.268 (ramp 6.437 at
+0.267, uniform ≈6.32 there) and k=23 gives IS 6.862 at NN-RMS 0.237 (uniform
+≈6.86 there). So the coarse-to-fine ordering still earns its keep; the down-ramp
+is a partial reshaping of it, not its removal. FID for these two is queued
+(job 48915101) but the IS gaps are ~5× the seed spread.
+
 Earlier chain, still standing: EBMLS is dominated everywhere (barrier 1.0 beats
 the LS baseline on IS, 3.30 vs 2.78, but is worse on FID, 200.7 vs 188.7);
 uniform ×2 beats ×1 on all three datasets with zero copies; ×2 on half the
@@ -41,7 +49,9 @@ Notebook `notebooks/mls_entropy_barrier_results.ipynb`, slides
 
 ## Running jobs
 
-None.
+- 48915101 `add_fid.py` for the two flat-schedule runs. Pending on `sganguli`
+  for ~50 min (Priority); it only merges FID into their metrics.json, so the
+  notebook/slides are complete without it — rerun the builders once it lands.
 
 ## Open problems
 
@@ -63,12 +73,16 @@ None.
   (Down-ramps help: they shrink the widest windows.)
 - Pre-existing, not mine: `tests/test_channel_theory.py::...boundary_returns_nan`
   fails and that file hangs on its last test. Needs a semantics call from hshunt.
+- Cosmetic: I named `results/mls_inception/2026-10-22/` a day ahead of the
+  system clock (which reads 2026-10-21). Left as-is rather than moving data; the
+  builders glob `2026-10-2*` so both are picked up.
 
 ## Next steps
 
 1. Fit the per-step schedule directly against FID under a zero-copy constraint
    instead of searching two-parameter ramps — the ramp family is clearly not the
-   end of this, since every down-ramp tried beat uniform.
+   end of this, since every down-ramp tried beat uniform while its flat limit
+   did not, so the optimum is somewhere between the two shapes.
 2. Retry the architecture with an additive residual layer 2, after the corrected
    posterior lands.
 3. ImageNet: candidate windows already cost the same at any resolution, but the

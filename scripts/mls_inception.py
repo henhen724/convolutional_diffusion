@@ -133,6 +133,10 @@ def main():
 	# A ramp rather than a step at the midpoint: a step makes the window schedule
 	# non-monotonic, which would confound the tilt with a broken coarse-to-fine ordering.
 	p.add_argument('--scale_multiplier_hi', type=float, default=None)
+	# The limit of the down-ramp: the same window at every step, with no coarse-to-fine
+	# structure left at all. If flattening is what the down-ramp is buying, this should land
+	# on or above its frontier; if the schedule's ordering still matters, it should be worse.
+	p.add_argument('--flat_k', type=int, default=None)
 	p.add_argument('--barrier', type=float, default=2.0)
 	p.add_argument('--barrier_mode', choices=['image', 'pixel'], default='image')
 	p.add_argument('--temperature', type=float, default=1.0)
@@ -157,7 +161,9 @@ def main():
 	def _widen(s, m):
 		return min(2 * size - 1, int(round(s * m)) | 1)
 
-	if args.scale_multiplier_hi is not None:
+	if args.flat_k is not None:
+		scales = [min(2 * size - 1, args.flat_k | 1)] * len(scales)
+	elif args.scale_multiplier_hi is not None:
 		m0, m1, n = args.scale_multiplier, args.scale_multiplier_hi, len(scales)
 		scales = [_widen(s, m0 + (m1 - m0) * i / (n - 1)) for i, s in enumerate(scales)]
 	elif args.scale_multiplier != 1.0:
@@ -223,7 +229,7 @@ def main():
 		'barrier_mode': args.barrier_mode if args.method == 'EBMLS' else None,
 		'temperature': args.temperature, 'nsamples': int(samples.shape[0]),
 		'scale_multiplier': args.scale_multiplier, 'mult_half': args.mult_half,
-		'scale_multiplier_hi': args.scale_multiplier_hi,
+		'scale_multiplier_hi': args.scale_multiplier_hi, 'flat_k': args.flat_k,
 		'IS_mean': float(isc['inception_score_mean']), 'IS_std': float(isc['inception_score_std']),
 		'nn_rms_median': None if nn_rms is None else float(nn_rms.median()),
 		'copy_fraction': None if nn_rms is None else float((nn_rms < args.copy_rms).float().mean()),
