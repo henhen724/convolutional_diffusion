@@ -39,9 +39,8 @@ asymptotic answer survived it. Notebook:
 
 ## Running jobs
 
-None. 50935971 (L=3 peak hunt + k=5 control) COMPLETED 02:33; 50976107 (deck) COMPLETED
-00:25. Deck `results/rhm_sampling/2026-11-03/rhm_sampling_complexity_slides.pdf` (7 pages,
-0.13 MB) is committed (`91954ea`, pushed) and uploaded to OneDrive.
+None. 50935971 (L=3 peaks + k=5 control) and 50976107 (deck) both COMPLETED. The 7-page
+deck `results/rhm_sampling/2026-11-03/rhm_sampling_complexity_slides.pdf` is on OneDrive.
 
 ## Open problems
 
