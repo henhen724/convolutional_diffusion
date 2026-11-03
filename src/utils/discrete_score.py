@@ -210,6 +210,7 @@ class ScheduledDiscreteScoreMachine(nn.Module):
         default_time_steps: int = 50,
         mask_schedule=linear_mask_schedule,
         mask_token: Optional[int] = None,
+        reveal_one: bool = False,
         **kwargs,
     ):
         super().__init__()
@@ -219,6 +220,7 @@ class ScheduledDiscreteScoreMachine(nn.Module):
         self.default_time_steps = default_time_steps
         self.mask_schedule = mask_schedule
         self.mask_token = vocab_size if mask_token is None else mask_token
+        self.reveal_one = reveal_one
 
     def forward(
         self,
@@ -242,6 +244,9 @@ class ScheduledDiscreteScoreMachine(nn.Module):
         b = xt.shape[0]
         if nsteps is None:
             nsteps = self.default_time_steps
+
+        if self.reveal_one:
+            return self._reveal_one_at_a_time(xt, label=label, device=device, generator=generator)
 
         i_start = max(1, round(t_start * nsteps))
         for i in range(i_start, 0, -1):
@@ -268,6 +273,48 @@ class ScheduledDiscreteScoreMachine(nn.Module):
                 sampled = torch.multinomial(probs, 1, generator=generator).reshape(b, xt.shape[1], xt.shape[2])
                 xt = torch.where(reveal, sampled, xt)
 
+        return xt
+
+    def _reveal_one_at_a_time(self, xt, label=None, device=None, generator=None):
+        """Reveal a single site per step, in uniformly random order.
+
+        The parallel reveal above draws every site chosen at a step from its own
+        *marginal*, so two sites uncovered together are independent even when the
+        posterior says they are not -- a sampler error that has nothing to do with
+        the backbone. Its rate is set by the number of simultaneous reveals,
+        roughly ``n**2 / (2 * nsteps)`` collisions per sample for ``n`` sites,
+        so it is large unless ``nsteps >> n**2``.
+
+        Uncovering one site at a time removes the error entirely: with an exact
+        conditional model this is ancestral sampling of the joint in a random
+        order, which is what absorbing-state diffusion is in the first place.
+        It also costs only ``n`` backbone calls. Use it whenever the question is
+        about the model rather than about the sampler.
+        """
+        b, h, w = xt.shape
+        n_sites = h * w
+        for step in range(n_sites):
+            still_masked = xt == self.mask_token
+            if not bool(still_masked.any()):
+                break
+            frac = still_masked.float().mean().item()
+            posterior = self.backbone(
+                torch.full((b,), frac, device=device), xt, label=label, device=device
+            )
+            # one uniformly random masked site per batch element
+            flat_masked = still_masked.reshape(b, n_sites)
+            noise = torch.rand(b, n_sites, device=device, generator=generator)
+            pick = torch.where(flat_masked, noise, torch.full_like(noise, -1.0)).argmax(dim=1)
+
+            probs = posterior.permute(0, 2, 3, 1).reshape(b, n_sites, self.vocab_size)
+            chosen = probs[torch.arange(b, device=device), pick].clamp_min(1e-12)
+            token = torch.multinomial(chosen, 1, generator=generator)[:, 0]
+
+            flat_xt = xt.reshape(b, n_sites).clone()
+            rows = torch.arange(b, device=device)
+            keep = flat_masked[rows, pick]  # False only if this element is already full
+            flat_xt[rows[keep], pick[keep]] = token[keep]
+            xt = flat_xt.reshape(b, h, w)
         return xt
 
     def sample(self, n_samples: int = 1, nsteps: Optional[int] = None, label=None, device=None, generator=None):

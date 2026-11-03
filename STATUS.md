@@ -1,59 +1,54 @@
-# STATUS — multilayer LS (MLS) / entropy-barrier MLS
+# STATUS
 
-Goal: multilayer LS, better samples on CIFAR-10 / CelebA / MNIST, cost independent of image size (ImageNet eventually).
+Two threads. **RHM sampling complexity** is active; **MLS** is parked (see LOG.md, and
+`notebooks/mls_entropy_barrier_results.ipynb` + `2026-10-22_mls_entropy_barrier_slides.pdf`).
 
-## Current best (commit 6688b2d, 500 samples, 5 IS splits, FID vs full train set)
-Record: `notebooks/mls_entropy_barrier_results.ipynb` (59 runs) + `notebooks/2026-10-22_mls_entropy_barrier_slides.pdf`, also on OneDrive; data in `results/mls_inception/2026-10-2{1,1b-1f,2,2b-2d}/`.
+## A. RHM sampling complexity (active, started 2026-11-02)
 
-**Best CIFAR-10: IS 6.75, FID 78.8 — the champion window schedule run at 60 sampler
-steps.** The multilayer layer is dominated on both metrics; two things beat it, the
-schedule's *shape* and the *step count*. The shape ramps the multiplier **×3.4 at t=0
-down to ×1.6 at t=1** (below, at 20 steps, vs uniform ×2 at matched memorization):
+Question: how many training grids `P` before the LS machine generates RHM samples that are
+**both novel and fully grammatical**, and how does that `P*` scale with `(v, s, L, m)`?
 
-| dataset | NN-RMS | IS | FID | copies |
-|---|---|---|---|---|
-| CIFAR-10 s0/s1 | 0.267/0.270, 0.271/0.274 | 6.44/6.29, 6.31/6.07 | **83.3/94.0, 86.1/93.0** | ~0 |
-| CelebA | 0.301/0.302 | 2.34/2.34 | **70.0/79.4** | 0.000/0.000 |
+New, all validated by `tests/test_rhm_sampling.py` (14 pass):
+- `src/utils/rhm_grammar.py` — exact parser. Bottom-up feasible-symbol bitmasks give
+  grammaticality, `parse_height`, per-level parse fractions and exact novelty.
+- `src/utils/rhm_sampling.py` — `PatchCountDiscreteScoreMachine`, identical posterior to
+  `LocalDiscreteScoreMachine` (max|diff| 0.0) but costed by *distinct* patches, so `P` can
+  go to 1e5. Options `block_align` (phase-aware vs translation-invariant) and `pad_mode`
+  (`outside` tells it where the grid edge is) isolate two separate assumptions.
+- `discrete_score.py` gained `reveal_one`: the existing sampler reveals sites in parallel
+  from their marginals, costing ~`n^2/2T` independence errors per sample (~12% of grids at
+  `n=64, T=256`). One site per step is exact *and* 4x cheaper. Used everywhere below.
 
-~9 FID at matched distance, zero copies, vs a ~2.8 FID seed spread. MNIST is flat
-(16.6/17.0, floor 12.2) and EBMLS dominated (IS 3.30 vs 2.78, FID 201/189).
-**Six shape controls bound the mechanism and all fail** (notebook): up-ramp, flat,
-single-ended pushes, both axes of (level, compression) — each trading along one frontier.
-
-**Step count is the first knob that leaves that frontier, and today's win** (`2026-10-22c,d/`).
-`--nsteps` resamples the window-vs-t curve onto more steps with the window at each noise level
-fixed. Seed-matched, 60 steps beats 20 on IS, FID *and* training-set distance at once:
-
-| steps | seed | NN-RMS | IS | FID | copies |
-|---|---|---|---|---|---|
-| 20 (champion) | 0/1 | 0.267/0.270 | 6.44/6.31 | 83.3/86.1 | 0.002/~0 |
-| 40 | 0 | 0.279 | 6.31±0.27 | 82.3 | 0.010 |
-| **60** | **0/1** | **0.280/0.284** | **6.75/6.75** | **78.8/80.0** | 0.016/0.008 |
-| 100 | 0 | 0.286 | 6.63±0.62 | 78.9 | 0.014 |
-
-The IS gain replicates: both 60-step seeds beat the better 20-step seed, +0.37
-seed-matched against a 0.13 seed spread. It saturates at 60 — 100 steps leaves FID flat
-and triples the IS split spread — and costs 5.8× the generation time of 20 steps.
+**Established so far.** Counting is exact: distinct aligned `s^j` blocks
+`A_j = v·m^((s^(2j)-1)/(s^2-1))`, measured 12/6/972/96 vs predicted for four `(v,m,L)`.
+Total grids `v·m^((s^(2L)-1)/(s^2-1))` (4e10 at `v=4,m=3,L=3`), so **novelty is free and
+grammaticality is the binding constraint**. A window of side `k` centred on a site reaches
+only `k//2`, so it can enforce a block of side `b` only when `k >= 2b-1`: for `L=3`, `k=3`
+covers the 2x2 leaf blocks, `k=7` the 4x4, `k=15` everything (pure memorization, verified
+gram 1.000 / novel 0.000). Predicts grammaticality decaying like `f^U` with
+`U = (s^(2(L-j))-1)/(s^2-1)` unenforced rules and `f ≈ m/v^(s^2-1)`.
 
 ## Running jobs
 
-- 49028331 → `2026-10-22e/` (FID follows as 49028338): re-tune the window schedule at 60
-  steps, where it was never fitted: uniform ×2 as the shape control, plus the ramp at level
-  +15% and +30% (×3.9→1.84, ×4.4→2.08). Hypothesis: 60 steps freed ~0.013 of NN-RMS, so a
-  wider schedule spends it and beats FID 83.3 at NN-RMS 0.267 — i.e. the frontier moved.
+- **50859790** (CPU, 8 h) → `results/rhm_sampling/2026-11-02/counts_{m,v,k7}.json`:
+  `N_k(P)`, distinct windows vs P, to 3e5. Cheap proxy for `P*`; tests `A_j` scaling in v, m.
+- **50859792** (GPU, 10 h) → same dir, `A1`–`D`: generation sweep, grammatical/novel/success
+  and per-level parse fraction vs P, over k, block_align, pad_mode, then v, m, L one at a time.
 
 ## Open problems
 
-- **Blocked on hshunt: the layer-2 posterior.** You said the implemented one is wrong
-  for a training-set image. Today's code conditions on `x_hat_1` (not the noisy `x`),
-  per-pixel Gaussian, `sigma^2 = temperature * b_t^2/a_t^2`, no prior. It also moves
-  the entropies the barrier thresholds on: every MLS/EBMLS number needs rerunning.
-- **Layer 2 replaces rather than refines**: weights sum to 1 per pixel, so `x_hat_1 + delta` *is* the layer-2 posterior mean. Try an additive residual.
-- With more steps the median sample moves *away* from the training set while the copy tail grows (0.2%→1.6% at seed 0, but 0.8% at seed 1, so noisy at 500 samples). Unexplained.
-- Pre-existing, not mine: `test_channel_theory.py::...boundary_returns_nan` fails and that file hangs on its last test — a semantics call from you.
+- **The repo's LS machine may have no finite `P*`.** It pools patches over all offsets, but
+  the RHM is block-aligned, so a window cannot tell its phase. At `v=4,L=2,m=3,k=3` with the
+  grammar's *whole* support in training (P=2000 vs 972 grids) it scores gram 0.000 with only
+  22% of aligned 2x2 blocks valid — a ceiling, not a data limit. Phase-awareness lifts 50%-mask
+  token accuracy 0.613→0.714. Job A2/A3 prices this properly.
+- `k=5` is *worse* than `k=3` at P=2000 (token acc 0.40 vs 0.82) and gets worse with *more*
+  context — the data-starvation signature, 1e5 distinct 5x5 patches from 2000 grids.
+- **Blocked on hshunt (MLS):** the corrected layer-2 posterior. Nothing MLS runs until it lands.
+- Pre-existing, not mine: `test_channel_theory.py::...boundary_returns_nan` fails, file hangs.
 
 ## Next steps
 
-1. **Confound for the step-count win:** the 20-step champion's schedule is non-monotone — `[11,11,11,9,15,...]`, four dips, from rounding `base(t)*mult(t)` to odd — and resampling dilutes each dip over 3× as many steps. So "finer integration" and "smoother schedule" are not separated. Test with a monotonized (cumulative-max) schedule at 20 steps; needs a flag in `mls_inception.py`, so not while 49028331 runs on it.
-2. Additive residual layer 2, once the corrected posterior lands.
-3. ImageNet: candidates cost O(1) in resolution, but the per-step pass over the train set scales with N (ANN search), and 60 steps multiplies that by 3.
+1. Read `P*` off both jobs; fit `P*(k, v, m, L)` and check it against the `f^U` prediction.
+2. Results notebook + slide PDF, with example grids and the tokenization spelled out.
+3. MLS: monotonized 20-step schedule control, to separate finer integration from smoother shape.
