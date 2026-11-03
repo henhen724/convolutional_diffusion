@@ -38,7 +38,9 @@ python scripts/rhm_ceiling_exact.py --v 2 3 4 6 8 --m 2 3 4 5 --L 3 --k 3 7 15 \
 # L=1 and L=4 pin the two ends of the depth law at the reference grammar.
 python scripts/rhm_ceiling_exact.py --v 2 4 --m 3 --L 1 --k 3 \
     --rule_seeds 3 --mc 200000 --enumerate_top --out "$OUT/ceiling_L1.json"
-python scripts/rhm_ceiling_exact.py --v 2 4 --m 3 --L 4 --k 3 7 15 31 \
+# k=15 is dropped at L=4: j*=3 there and |R_3| = v m^21 cannot be enumerated.
+# k=31 is the full window (j*=L), so it costs nothing.
+python scripts/rhm_ceiling_exact.py --v 2 4 --m 3 --L 4 --k 3 7 31 \
     --rule_seeds 3 --mc 400000 --out "$OUT/ceiling_L4.json"
 
 echo "done $(date)"

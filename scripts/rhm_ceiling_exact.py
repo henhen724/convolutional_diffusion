@@ -150,8 +150,11 @@ def main():
                     model = RandomHierarchyModel2D(v=v, s=s, L=L, m=m, seed=1000 + rs)
                     # R_L is enumerable only at small depth; R_j for j < L always is.
                     # j* == L is the full-window case: the ceiling is exactly 1
-                    # (and novelty exactly 0), so nothing needs enumerating.
-                    j_max = min(L - 1, max(min(j_star(k, s), L) for k in args.k))
+                    # (and novelty exactly 0), so nothing needs enumerating -- and such
+                    # a k must not drag j_max up to L-1, which is what OOM-killed the
+                    # L=4 stage of 50861297 (k=31 pulled in |R_3| = v m^21).
+                    needed = [j for j in (min(j_star(k, s), L) for k in args.k) if j < L]
+                    j_max = max(needed) if needed else 0
                     rj = {j: distinct_renderings(model, j) for j in range(j_max + 1)}
                     if args.enumerate_top and L not in rj:
                         rj[L] = distinct_renderings(model, L)
