@@ -293,18 +293,24 @@ class ScheduledDiscreteScoreMachine(nn.Module):
         """
         b, h, w = xt.shape
         n_sites = h * w
+        # The site to reveal does not depend on the posterior, so choosing it
+        # first lets a backbone that supports it evaluate that site alone
+        # instead of all n -- the other n-1 posteriors were always discarded.
+        site_aware = getattr(self.backbone, 'supports_sites', False)
         for step in range(n_sites):
             still_masked = xt == self.mask_token
             if not bool(still_masked.any()):
                 break
             frac = still_masked.float().mean().item()
-            posterior = self.backbone(
-                torch.full((b,), frac, device=device), xt, label=label, device=device
-            )
             # one uniformly random masked site per batch element
             flat_masked = still_masked.reshape(b, n_sites)
             noise = torch.rand(b, n_sites, device=device, generator=generator)
             pick = torch.where(flat_masked, noise, torch.full_like(noise, -1.0)).argmax(dim=1)
+
+            kw = {'sites': pick} if site_aware else {}
+            posterior = self.backbone(
+                torch.full((b,), frac, device=device), xt, label=label, device=device, **kw
+            )
 
             probs = posterior.permute(0, 2, 3, 1).reshape(b, n_sites, self.vocab_size)
             chosen = probs[torch.arange(b, device=device), pick].clamp_min(1e-12)

@@ -28,6 +28,7 @@ quantity the scaling law turns out to be about.
 
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 import numpy as np
@@ -70,19 +71,92 @@ def distinct_patch_table(grids, k: int, vocab_size: int, phase=None, block_align
         site_offset = 0  # window at padded top-left r predicts grid site r
     else:
         site_offset = d  # window at top-left r predicts grid site r + d
-    # (P, nr, nc, k, k) -> one entry per sliding-window position.
-    windows = g.unfold(1, k, 1).unfold(2, k, 1)
+    nr, nc = g.shape[1] - k + 1, g.shape[2] - k + 1
+    keep_r = keep_c = None
     if phase is not None and block_align > 1:
-        rows = (torch.arange(windows.shape[1]) + site_offset) % block_align == phase[0]
-        cols = (torch.arange(windows.shape[2]) + site_offset) % block_align == phase[1]
-        windows = windows[:, rows][:, :, cols]
-    windows = windows.reshape(-1, k * k)
-    if windows.shape[0] == 0:
+        keep_r = (torch.arange(nr) + site_offset) % block_align == phase[0]
+        keep_c = (torch.arange(nc) + site_offset) % block_align == phase[1]
+
+    # One row per sliding-window position. Unfolding the whole stack at once
+    # would materialise P * nr * nc rows of k*k int64 -- 2.6e8 rows, about
+    # 100 GB, at P = 4e6 with k = 7 -- because reshaping a strided unfold view
+    # copies. So the chunking happens *before* the unfold: each slice of grids
+    # is unfolded and folded into the running table, whose height is bounded by
+    # N_k rather than by P.
+    def chunks():
+        step = max(1, _MAX_FOLD_ROWS // max(1, nr * nc))
+        for i in range(0, g.shape[0], step):
+            w = g[i:i + step].unfold(1, k, 1).unfold(2, k, 1)
+            if keep_r is not None:
+                w = w[:, keep_r][:, :, keep_c]
+            yield w.reshape(-1, k * k)
+
+    uniq, counts = _unique_with_counts(chunks(), vocab_size + 1)
+    if uniq.shape[0] == 0:
         return torch.zeros(0, k, k, dtype=torch.long), torch.zeros(0, dtype=torch.float64)
-    uniq, inverse = torch.unique(windows, dim=0, return_inverse=True)
-    counts = torch.zeros(uniq.shape[0], dtype=torch.float64)
-    counts.scatter_add_(0, inverse, torch.ones_like(inverse, dtype=torch.float64))
     return uniq.reshape(-1, k, k), counts
+
+
+def _pack_rows(rows, base):
+    """Pack rows of digits in ``[0, base)`` into as few int64 words as fit.
+
+    Returns the ``(N, nwords)`` key tensor and the per-word digit widths, which
+    :func:`_unpack_rows` needs to invert it.
+    """
+    per = max(1, int(62 / math.log2(base)))         # digits that fit one word
+    words, spans = [], []
+    for i in range(0, rows.shape[1], per):
+        chunk = rows[:, i:i + per]
+        w = torch.zeros(rows.shape[0], dtype=torch.long)
+        for j in range(chunk.shape[1]):
+            w = w * base + chunk[:, j]
+        words.append(w)
+        spans.append(chunk.shape[1])
+    return torch.stack(words, 1), spans
+
+
+def _unpack_rows(keys, spans, base):
+    """Inverse of :func:`_pack_rows`."""
+    out = []
+    for c, width in enumerate(spans):
+        w = keys[:, c].clone()
+        digits = torch.zeros(keys.shape[0], width, dtype=torch.long)
+        for j in range(width - 1, -1, -1):
+            digits[:, j] = w % base
+            w = w // base
+        out.append(digits)
+    return torch.cat(out, 1)
+
+
+_MAX_FOLD_ROWS = 20_000_000
+
+
+def _unique_with_counts(chunk_iter, base):
+    """Distinct rows with multiplicities, over an iterable of row chunks.
+
+    Rows are packed into a few int64 words -- 49 base-3 digits fit in two -- so
+    the lexicographic sort inside ``torch.unique`` compares 2 columns instead of
+    49, and each chunk is folded into the running table as it arrives rather
+    than concatenated first.
+    """
+    spans = None
+    uniq = counts = None
+    for rows in chunk_iter:
+        if rows.shape[0] == 0:
+            continue
+        keys, spans = _pack_rows(rows, base)
+        if uniq is not None:
+            keys = torch.cat([uniq, keys], 0)
+        u, inv = torch.unique(keys, dim=0, return_inverse=True)
+        c = torch.zeros(u.shape[0], dtype=torch.float64)
+        w = torch.ones(keys.shape[0], dtype=torch.float64)
+        if uniq is not None:
+            w[:uniq.shape[0]] = counts          # carry the running multiplicities
+        c.scatter_add_(0, inv, w)
+        uniq, counts = u, c
+    if uniq is None:
+        return torch.zeros(0, dtype=torch.long), torch.zeros(0, dtype=torch.float64)
+    return _unpack_rows(uniq, spans, base), counts
 
 
 class PatchCountDiscreteScoreMachine(nn.Module):
@@ -167,7 +241,7 @@ class PatchCountDiscreteScoreMachine(nn.Module):
         return (getattr(self, f'patch_onehot_{idx}'), getattr(self, f'patch_weight_{idx}'),
                 getattr(self, f'patch_center_{idx}'), getattr(self, f'patch_nout_{idx}'))
 
-    def _match_gemm(self, idx, xt_pad, need, need_out, k, b, h, w):
+    def _match_gemm(self, idx, xt_pad, need, need_out, k, b, h, w, sites=None):
         """Same match-and-accumulate as the conv2d loop, as one GEMM per chunk.
 
         ``conv2d`` with ``NP`` output channels over a ``(h+k-1)`` input is the
@@ -186,9 +260,17 @@ class PatchCountDiscreteScoreMachine(nn.Module):
         need_f = need.reshape(-1, 1)
         out_f = (None if need_out is None
                  else need_out.reshape(1, h * w).expand(b, h * w).reshape(-1, 1))
-        c_flat = torch.zeros(b * h * w, V, device=cols.device)
-        n_flat = torch.zeros(b * h * w, device=cols.device)
-        wl_flat = torch.zeros(b * h * w, device=cols.device)
+        if sites is not None:
+            # Only one site per batch element is ever read by the reveal-one
+            # sampler, and the match is per site, so restricting here drops the
+            # GEMM from b*h*w rows to b -- a factor of n on the whole trajectory.
+            sel = torch.arange(b, device=cols.device) * (h * w) + sites.to(cols.device)
+            cols, need_f = cols[sel], need_f[sel]
+            out_f = None if out_f is None else out_f[sel]
+        rows_out = cols.shape[0]
+        c_flat = torch.zeros(rows_out, V, device=cols.device)
+        n_flat = torch.zeros(rows_out, device=cols.device)
+        wl_flat = torch.zeros(rows_out, device=cols.device)
         for i in range(0, np_, self.chunk):
             sl = slice(i, min(i + self.chunk, np_))
             agree = (cols @ flat[sl].T).float()                      # (B', chunk)
@@ -199,11 +281,21 @@ class PatchCountDiscreteScoreMachine(nn.Module):
             c_flat += mw @ center[sl]
             n_flat += mw.sum(1)
             wl_flat += mw @ weight[sl].clamp_min(1e-12).log()
+        if sites is not None:
+            # back to full grid shape; untouched sites keep n_match = 0, which
+            # the caller turns into the uniform smoothing prior and never reads
+            c_full = torch.zeros(b * h * w, V, device=cols.device)
+            n_full = torch.zeros(b * h * w, device=cols.device)
+            wl_full = torch.zeros(b * h * w, device=cols.device)
+            c_full[sel], n_full[sel], wl_full[sel] = c_flat, n_flat, wl_flat
+            c_flat, n_flat, wl_flat = c_full, n_full, wl_full
         return (c_flat.reshape(b, h, w, V).permute(0, 3, 1, 2).contiguous(),
                 n_flat.reshape(b, h, w), wl_flat.reshape(b, h, w))
 
+    supports_sites = True
+
     def forward(self, t, xt: torch.Tensor, label=None, device=None, k: Optional[int] = None,
-                return_match: bool = False):
+                return_match: bool = False, sites: Optional[torch.Tensor] = None):
         """(B, V, H, W) posterior over the true token at every site.
 
         ``return_match`` additionally returns the (B, H, W) count of training
@@ -266,7 +358,7 @@ class PatchCountDiscreteScoreMachine(nn.Module):
                 continue
             if self.use_gemm:
                 c_phase, n_phase, wl_phase = self._match_gemm(
-                    idx, xt_pad, need, need_out, k, b, h, w)
+                    idx, xt_pad, need, need_out, k, b, h, w, sites=sites)
                 if self.block_align <= 1:
                     counts, n_match = counts + c_phase, n_match + n_phase
                     wlogw = wlogw + wl_phase
@@ -432,22 +524,26 @@ def locally_valid_fraction(machine, grids, k: int, vocab_size: int, pad_mode: st
     d = k // 2
     if pad_mode == 'outside':
         g = F.pad(g[:, None], (d, k - 1 - d, d, k - 1 - d), value=vocab_size)[:, 0]
-    w = g.unfold(1, k, 1).unfold(2, k, 1).reshape(g.shape[0], -1, k * k)
+    npos = (g.shape[1] - k + 1) * (g.shape[2] - k + 1)
+    w = g.unfold(1, k, 1).unfold(2, k, 1).reshape(-1, k * k)
     # the table back as token ids: the one-hot was built from them
     tab = machine.patch_onehot_0.argmax(dim=1).reshape(-1, k * k).cpu()
+    if tab.shape[0] == 0:
+        return 0.0
 
-    # base v+1 in two halves -- (v+1)**49 overflows one int64 at k=7
-    half = (k * k + 1) // 2
+    # same packing as the table build, so the two agree on key order and the
+    # word split adapts to the base -- a fixed two-way split overflows int64
+    # once v+1 is large enough (9**25 at v=8, k=7)
     base = vocab_size + 1
-    p_lo = base ** torch.arange(half, dtype=torch.long)
-    p_hi = base ** torch.arange(k * k - half, dtype=torch.long)
+    tk, _ = _pack_rows(tab, base)
+    qk, _ = _pack_rows(w, base)
 
-    def key(x):
-        return torch.stack([(x[..., :half] * p_lo).sum(-1), (x[..., half:] * p_hi).sum(-1)], -1)
-
-    # membership on the two-word keys, as a hash set: the table has up to a few
-    # million rows and the query only a few tens of thousands
-    tabset = set(map(tuple, key(tab).tolist()))
-    wk = key(w).tolist()                                     # (N, npos, 2)
-    ok = [all(tuple(q) in tabset for q in row) for row in wk]
-    return float(np.mean(ok))
+    # membership by sorted lookup rather than a Python set: at N_k ~ 2e7 a set
+    # of key tuples costs several GB of objects, while the void view is one
+    # int64 per word and searchsorted stays in C.
+    dt = [('w%d' % c, '<i8') for c in range(tk.shape[1])]
+    tv = np.sort(np.ascontiguousarray(tk.numpy()).view(dt).ravel())
+    qv = np.ascontiguousarray(qk.numpy()).view(dt).ravel()
+    idx = np.searchsorted(tv, qv)
+    hit = tv[np.clip(idx, 0, tv.size - 1)] == qv
+    return float(hit.reshape(-1, npos).all(axis=1).mean())

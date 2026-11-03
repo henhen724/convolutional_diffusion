@@ -114,10 +114,17 @@ def valid_block_fraction(model, grids: Array, level: int) -> float:
     return float((feasible_symbol_masks(model, grids)[level] != 0).mean())
 
 
-def _rows_as_keys(grids: Array) -> Array:
-    """Hashable 1-D view of each grid, for exact set membership."""
+def _rows_as_keys(grids: Array) -> list:
+    """Hashable 1-D view of each grid, for exact set membership.
+
+    ``bytes`` rather than the structured-dtype scalars this used to return: the
+    membership test needs Python objects, and ``.tolist()`` on the structured
+    view produces a 64-element tuple of ints per grid. At the ``P ~ 4e6``
+    training sets the L=3 sweep now reaches that is several GB of tuples and
+    dominates the cell; the byte strings are 64 bytes each and hash faster.
+    """
     g = np.ascontiguousarray(np.asarray(grids, dtype=np.int8))
-    return g.reshape(g.shape[0], -1).view([('', np.int8)] * (g.shape[1] * g.shape[2])).ravel()
+    return list(map(bytes, g.reshape(g.shape[0], -1)))
 
 
 def is_novel(train_grids: Array, grids: Array) -> Array:
@@ -127,8 +134,8 @@ def is_novel(train_grids: Array, grids: Array) -> Array:
     have no metric, so "close to a training sample" is not meaningful and a
     single differing token already makes a different sentence of the grammar.
     """
-    train = set(_rows_as_keys(train_grids).tolist())
-    return np.array([key not in train for key in _rows_as_keys(grids).tolist()], dtype=bool)
+    train = set(_rows_as_keys(train_grids))
+    return np.array([key not in train for key in _rows_as_keys(grids)], dtype=bool)
 
 
 def evaluate_samples(model, train_grids: Array, grids: Array) -> dict:
@@ -149,5 +156,5 @@ def evaluate_samples(model, train_grids: Array, grids: Array) -> dict:
         'success': float((gram & novel).mean()),
         'parse_height_mean': float(parse_height(model, grids).mean()),
         'level_parse_fraction': [float((masks[l] != 0).mean()) for l in range(model.L + 1)],
-        'n_distinct': int(len(set(_rows_as_keys(grids).tolist()))),
+        'n_distinct': int(len(set(_rows_as_keys(grids)))),
     }
