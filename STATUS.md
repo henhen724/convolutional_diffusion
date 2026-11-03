@@ -1,54 +1,60 @@
 # STATUS
 
-Two threads. **RHM sampling complexity** is active; **MLS** is parked (see LOG.md, and
-`notebooks/mls_entropy_barrier_results.ipynb` + `2026-10-22_mls_entropy_barrier_slides.pdf`).
+**RHM sampling complexity** is active; **MLS** is parked (LOG.md, `notebooks/mls_entropy_barrier_results.ipynb`).
 
-## A. RHM sampling complexity (active, started 2026-11-02)
+## A. RHM sampling complexity -- ANSWERED (2026-11-02)
 
-Question: how many training grids `P` before the LS machine generates RHM samples that are
-**both novel and fully grammatical**, and how does that `P*` scale with `(v, s, L, m)`?
+How many training grids `P` before the LS machine emits grids that are **both novel and
+fully grammatical**, and how does `P*` scale with `(v, s, L, m, k)`?
 
-New, all validated by `tests/test_rhm_sampling.py` (14 pass):
-- `src/utils/rhm_grammar.py` — exact parser. Bottom-up feasible-symbol bitmasks give
-  grammaticality, `parse_height`, per-level parse fractions and exact novelty.
-- `src/utils/rhm_sampling.py` — `PatchCountDiscreteScoreMachine`, identical posterior to
-  `LocalDiscreteScoreMachine` (max|diff| 0.0) but costed by *distinct* patches, so `P` can
-  go to 1e5. Options `block_align` (phase-aware vs translation-invariant) and `pad_mode`
-  (`outside` tells it where the grid edge is) isolate two separate assumptions.
-- `discrete_score.py` gained `reveal_one`: the existing sampler reveals sites in parallel
-  from their marginals, costing ~`n^2/2T` independence errors per sample (~12% of grids at
-  `n=64, T=256`). One site per step is exact *and* 4x cheaper. Used everywhere below.
+**There is no finite `P*`:** grammaticality and novelty come from the same mechanism --
+copying a training grid -- so they never hold together. Where grammaticality is `Theta(1)`,
 
-**Established so far.** Counting is exact: distinct aligned `s^j` blocks
-`A_j = v·m^((s^(2j)-1)/(s^2-1))`, measured 12/6/972/96 vs predicted for four `(v,m,L)`.
-Total grids `v·m^((s^(2L)-1)/(s^2-1))` (4e10 at `v=4,m=3,L=3`), so **novelty is free and
-grammaticality is the binding constraint**. A window of side `k` centred on a site reaches
-only `k//2`, so it can enforce a block of side `b` only when `k >= 2b-1`: for `L=3`, `k=3`
-covers the 2x2 leaf blocks, `k=7` the 4x4, `k=15` everything (pure memorization, verified
-gram 1.000 / novel 0.000). Predicts grammaticality decaying like `f^U` with
-`U = (s^(2(L-j))-1)/(s^2-1)` unenforced rules and `f ≈ m/v^(s^2-1)`.
+    P*  =  v m^(Theta(n / (s^2 - 1)))  =  exp(Theta(n)),   n = s^(2L) sites
+
+and there novelty is identically 0. At fixed `k`, `ln(1/success) = Theta(n / k^2)`. The LS
+machine gets **no** benefit from the hierarchy: same cost as memorizing the distribution.
+
+Two legs. **(1) Ceiling, derived.** A `k x k` window reaches `k//2`, so it polices aligned
+blocks only up to side `s^j*`, `j* = floor(log_s((k+1)/2))`. With unlimited data it samples
+the locally-valid set, of which the grammar is `C(k) = |R_L| / |R_j*|^(s^(2(L-j*)))`,
+collapsing to `f0^U` with `f0 = m/v^(s^2-1)`, `U = (s^(2(L-j*))-1)/(s^2-1)`.
+`rhm_ceiling_exact.py` checks it by enumeration -- over 150 enumerable L=2 cases it equals
+the closed form in exactly the 70 with no word collision and differs in exactly the 80 with
+one -- and by MC (0.047195 vs exact 0.046875). **(2) Cost, measured.** Filling the table is
+coupon-collecting `N_k` distinct windows: `N_3` is polynomial (`~v^4.4 m^2.8` at L=3;
+13 602 at v=4,m=3,L=3, +2%/decade), `N_5`/`N_7` nowhere near (5.3e6, 1.6e6, +5.4x/+8.9x).
+
+**Measured** (jobs 50859790 / 50861030; `succ = gram + novel - 1` identically):
+- L=3 k=3: `gram=0` at every `P` 30..1e5 **but one** (1 grid in 1024 at P=3e4, the
+  resolution floor, gone again at 1e5) while the patch table runs out (11 890, +7%/decade).
+  2x2 blocks 0.578->0.995, 4x4 stuck at 0.125: it learns the level it reaches and stalls
+  forever on the one above. k=5 is *worse* (same `j*`, bigger table); k=7 the only nonzero
+  gram short of the full window (0.021, *falling* with P); k=15=2d-1 gives gram 0.82-0.87,
+  novel 0.13-0.18, succ 0.000-0.002.
+- Exponents at L=2 k=3: `succ_max` tracks the exact ceiling (ratios 0.75-1.43 over 10
+  (v,m)); slope in v **-3.19** (predicted -3), in m +1.57 (predicted +1). Depth law with
+  `f0` fixed: succ_max 0.432 (U=1) -> 0.0172 (U=5), predicted 0.375 -> 0.0074.
+- `P*` at L=2: peaks succ=0.052 at P*=500 (m=3, |R_L|=972) and 0.118 at P*=3000 (m=5,
+  |R_L|=12500), then collapses as novelty drains (0.91->0.82). At k=7=2d-1, succ=1.6e-4
+  at P=10 (1 grid in 6144) and exactly 0 at the other 16 P.
+- Geometry: 2x2 parse 0.995 phase-aware vs 0.348 pooled vs 0.241 pooled+zero-pad (repo's `LocalDiscreteScoreMachine`); use `block_align=s`, `pad_mode=outside`.
 
 ## Running jobs
 
-- **50859790** (CPU, 8 h) → `results/rhm_sampling/2026-11-02/counts_{m,v,k7}.json`:
-  `N_k(P)`, distinct windows vs P, to 3e5. Cheap proxy for `P*`; tests `A_j` scaling in v, m.
-- **50859792** (GPU, 10 h) → same dir, `A1`–`D`: generation sweep, grammatical/novel/success
-  and per-level parse fraction vs P, over k, block_align, pad_mode, then v, m, L one at a time.
+- **50882105** (CPU, 1 h) `rhm_report.sbatch` -- rebuilds deck + notebook after a
+  prose-vs-tables audit corrected six overstated numbers. Last step before upload.
 
 ## Open problems
 
-- **The repo's LS machine may have no finite `P*`.** It pools patches over all offsets, but
-  the RHM is block-aligned, so a window cannot tell its phase. At `v=4,L=2,m=3,k=3` with the
-  grammar's *whole* support in training (P=2000 vs 972 grids) it scores gram 0.000 with only
-  22% of aligned 2x2 blocks valid — a ceiling, not a data limit. Phase-awareness lifts 50%-mask
-  token accuracy 0.613→0.714. Job A2/A3 prices this properly.
-- `k=5` is *worse* than `k=3` at P=2000 (token acc 0.40 vs 0.82) and gets worse with *more*
-  context — the data-starvation signature, 1e5 distinct 5x5 patches from 2000 grids.
+- Measured ceiling sits a bounded ~1.2-2.7x above the independent-blocks prediction
+  (overlapping windows carry cross-block correlation). Renormalizes `f0`, not `U`, so the asymptotics stand, but unquantified.
+- `ceiling_L4.json` missing: that stage of 50861297 OOM-killed enumerating `R_3`. Needs a
+  size budget on `j_max`, `--k 15 31` dropped. Attempt 1 of 3; optional confirmation only.
 - **Blocked on hshunt (MLS):** the corrected layer-2 posterior. Nothing MLS runs until it lands.
-- Pre-existing, not mine: `test_channel_theory.py::...boundary_returns_nan` fails, file hangs.
 
 ## Next steps
 
-1. Read `P*` off both jobs; fit `P*(k, v, m, L)` and check it against the `f^U` prediction.
-2. Results notebook + slide PDF, with example grids and the tokenization spelled out.
-3. MLS: monotonized 20-step schedule control, to separate finer integration from smoother shape.
+1. Collect 50882105, upload the deck, commit notebook + PDF + JSONs.
+2. **The experiment this points at:** a hierarchy of 3x3 windows (a second machine on
+   inferred level-1 symbols) polices scale `s^2` for two tables of size `|R_1|`: polynomial, not exponential. RHM-side MLS, and falsifiable.

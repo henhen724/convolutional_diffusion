@@ -1,0 +1,146 @@
+[
+ {
+  "v": 2,
+  "s": 2,
+  "L": 1,
+  "m": 3,
+  "k": 3,
+  "rule_seed": 0,
+  "j_star": 1,
+  "U": 0,
+  "R": {
+   "0": 2,
+   "1": 6
+  },
+  "R_ideal": {
+   "0": 2,
+   "1": 6
+  },
+  "pool": 6,
+  "ceiling_exact": 1.0,
+  "ceiling_closed": 1.0,
+  "ceiling_mc": 1.0,
+  "mc_draws": 200000,
+  "collisions": false
+ },
+ {
+  "v": 2,
+  "s": 2,
+  "L": 1,
+  "m": 3,
+  "k": 3,
+  "rule_seed": 1,
+  "j_star": 1,
+  "U": 0,
+  "R": {
+   "0": 2,
+   "1": 5
+  },
+  "R_ideal": {
+   "0": 2,
+   "1": 6
+  },
+  "pool": 5,
+  "ceiling_exact": 1.0,
+  "ceiling_closed": 1.0,
+  "ceiling_mc": 1.0,
+  "mc_draws": 200000,
+  "collisions": true
+ },
+ {
+  "v": 2,
+  "s": 2,
+  "L": 1,
+  "m": 3,
+  "k": 3,
+  "rule_seed": 2,
+  "j_star": 1,
+  "U": 0,
+  "R": {
+   "0": 2,
+   "1": 5
+  },
+  "R_ideal": {
+   "0": 2,
+   "1": 6
+  },
+  "pool": 5,
+  "ceiling_exact": 1.0,
+  "ceiling_closed": 1.0,
+  "ceiling_mc": 1.0,
+  "mc_draws": 200000,
+  "collisions": true
+ },
+ {
+  "v": 4,
+  "s": 2,
+  "L": 1,
+  "m": 3,
+  "k": 3,
+  "rule_seed": 0,
+  "j_star": 1,
+  "U": 0,
+  "R": {
+   "0": 4,
+   "1": 12
+  },
+  "R_ideal": {
+   "0": 4,
+   "1": 12
+  },
+  "pool": 12,
+  "ceiling_exact": 1.0,
+  "ceiling_closed": 1.0,
+  "ceiling_mc": 1.0,
+  "mc_draws": 200000,
+  "collisions": false
+ },
+ {
+  "v": 4,
+  "s": 2,
+  "L": 1,
+  "m": 3,
+  "k": 3,
+  "rule_seed": 1,
+  "j_star": 1,
+  "U": 0,
+  "R": {
+   "0": 4,
+   "1": 12
+  },
+  "R_ideal": {
+   "0": 4,
+   "1": 12
+  },
+  "pool": 12,
+  "ceiling_exact": 1.0,
+  "ceiling_closed": 1.0,
+  "ceiling_mc": 1.0,
+  "mc_draws": 200000,
+  "collisions": false
+ },
+ {
+  "v": 4,
+  "s": 2,
+  "L": 1,
+  "m": 3,
+  "k": 3,
+  "rule_seed": 2,
+  "j_star": 1,
+  "U": 0,
+  "R": {
+   "0": 4,
+   "1": 12
+  },
+  "R_ideal": {
+   "0": 4,
+   "1": 12
+  },
+  "pool": 12,
+  "ceiling_exact": 1.0,
+  "ceiling_closed": 1.0,
+  "ceiling_mc": 1.0,
+  "mc_draws": 200000,
+  "collisions": false
+ }
+]
