@@ -39,10 +39,9 @@ asymptotic answer survived it. Notebook:
 
 ## Running jobs
 
-- **50976107** `rhm_deck.sbatch` -- rebuilds `peak_summary.json`/`collapse.png` and the
-  slide PDF (`results/rhm_sampling/2026-11-03/rhm_sampling_complexity_slides.pdf`, plus
-  per-page PNGs). GPU only for the trace page. Upload to OneDrive once it lands.
-- 50935971 (L=3 peak hunt + k=5 control) COMPLETED 02:33.
+None. 50935971 (L=3 peak hunt + k=5 control) COMPLETED 02:33; 50976107 (deck) COMPLETED
+00:25. Deck `results/rhm_sampling/2026-11-03/rhm_sampling_complexity_slides.pdf` (7 pages,
+0.13 MB) is committed (`91954ea`, pushed) and uploaded to OneDrive.
 
 ## Open problems
 
@@ -54,5 +53,9 @@ asymptotic answer survived it. Notebook:
 
 ## Next steps
 
-1. Fold 50976107's PDF into `claude-results-upload.sh` and push everything to origin main.
-2. If time before Friday: the straddling control, then the 1D depth probe.
+1. **Straddling control.** Same window size, same training grids, two tables: the real
+   translation-invariant machine (every window position) vs an aligned-only machine
+   (windows at multiples of the block size, so no window crosses a level-j boundary).
+   Natural size is `k = s^j`: at L=3, s=2, k=4 gives 25 positions vs 4. The aligned table
+   sees fewer patches per grid, so match on patch count, not on P.
+2. Then the 1D RHM depth probe at L=4-5, as a cheap third point for `exp(Theta(n))`.
