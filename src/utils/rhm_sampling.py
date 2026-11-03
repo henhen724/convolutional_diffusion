@@ -112,6 +112,7 @@ class PatchCountDiscreteScoreMachine(nn.Module):
         chunk: int = 8192,
         block_align: int = 1,
         pad_mode: str = 'zeros',
+        use_gemm: bool = True,
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -121,11 +122,18 @@ class PatchCountDiscreteScoreMachine(nn.Module):
         self.chunk = chunk
         self.block_align = block_align
         self.pad_mode = pad_mode
+        self.use_gemm = use_gemm
         # 'outside' adds one symbol, the off-grid marker, to the matching alphabet
         self.n_channels = vocab_size + 1 if pad_mode == 'outside' else vocab_size
         if device is None:
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = torch.device(device)
         self.device = device
+        # Agreement counts are integers bounded by k*k (one-hot inputs), so fp16
+        # represents them exactly up to 2048 and the tensor cores accumulate in
+        # fp32 anyway. Only the matching GEMM uses it; the weights, the counts
+        # and the posterior all stay fp32.
+        self.match_dtype = torch.float16 if device.type == 'cuda' else torch.float32
 
         d = kernel_size // 2
         a = block_align
@@ -139,6 +147,11 @@ class PatchCountDiscreteScoreMachine(nn.Module):
             )
             onehot = F.one_hot(patches, num_classes=self.n_channels).permute(0, 3, 1, 2).float()
             self.register_buffer(f'patch_onehot_{idx}', onehot.to(device))           # (NP, C, k, k)
+            # Flattened copy for the GEMM matching path. Same (C, k, k) element
+            # order as F.unfold produces, so the two index the window alike.
+            self.register_buffer(f'patch_flat_{idx}',
+                                 onehot.reshape(onehot.shape[0], -1).to(device=device,
+                                                                        dtype=self.match_dtype))
             self.register_buffer(f'patch_weight_{idx}', counts.float().to(device))   # (NP,)
             # the centre is always a real in-grid site, never the off-grid marker
             self.register_buffer(f'patch_center_{idx}', onehot[:, :vocab_size, d, d].to(device))
@@ -153,6 +166,41 @@ class PatchCountDiscreteScoreMachine(nn.Module):
     def _table(self, idx):
         return (getattr(self, f'patch_onehot_{idx}'), getattr(self, f'patch_weight_{idx}'),
                 getattr(self, f'patch_center_{idx}'), getattr(self, f'patch_nout_{idx}'))
+
+    def _match_gemm(self, idx, xt_pad, need, need_out, k, b, h, w):
+        """Same match-and-accumulate as the conv2d loop, as one GEMM per chunk.
+
+        ``conv2d`` with ``NP`` output channels over a ``(h+k-1)`` input is the
+        wrong kernel shape for this -- the arithmetic is a plain inner product
+        between each window and each patch, and casting it as a matmul over
+        unfolded windows runs it on the tensor cores instead. The result is
+        identical: agreement counts are small integers, so fp16 inputs with
+        fp32 accumulation reproduce them exactly.
+        """
+        onehot, weight, center, nout = self._table(idx)
+        flat = getattr(self, f'patch_flat_{idx}')
+        np_, V = flat.shape[0], self.vocab_size
+        # (b, C*k*k, h*w) -> (b*h*w, C*k*k), one row per output site
+        cols = F.unfold(xt_pad.to(self.match_dtype), (k, k))
+        cols = cols.transpose(1, 2).reshape(b * h * w, -1)
+        need_f = need.reshape(-1, 1)
+        out_f = (None if need_out is None
+                 else need_out.reshape(1, h * w).expand(b, h * w).reshape(-1, 1))
+        c_flat = torch.zeros(b * h * w, V, device=cols.device)
+        n_flat = torch.zeros(b * h * w, device=cols.device)
+        wl_flat = torch.zeros(b * h * w, device=cols.device)
+        for i in range(0, np_, self.chunk):
+            sl = slice(i, min(i + self.chunk, np_))
+            agree = (cols @ flat[sl].T).float()                      # (B', chunk)
+            match = (agree - need_f).abs() < 0.5
+            if out_f is not None:
+                match &= nout[None, sl] == out_f
+            mw = match.float() * weight[None, sl]
+            c_flat += mw @ center[sl]
+            n_flat += mw.sum(1)
+            wl_flat += mw @ weight[sl].clamp_min(1e-12).log()
+        return (c_flat.reshape(b, h, w, V).permute(0, 3, 1, 2).contiguous(),
+                n_flat.reshape(b, h, w), wl_flat.reshape(b, h, w))
 
     def forward(self, t, xt: torch.Tensor, label=None, device=None, k: Optional[int] = None,
                 return_match: bool = False):
@@ -215,6 +263,19 @@ class PatchCountDiscreteScoreMachine(nn.Module):
         for idx, ph in enumerate(self.phases):
             onehot, weight, center, nout = self._table(idx)
             if onehot.shape[0] == 0:
+                continue
+            if self.use_gemm:
+                c_phase, n_phase, wl_phase = self._match_gemm(
+                    idx, xt_pad, need, need_out, k, b, h, w)
+                if self.block_align <= 1:
+                    counts, n_match = counts + c_phase, n_match + n_phase
+                    wlogw = wlogw + wl_phase
+                else:
+                    sel = ((rows % self.block_align == ph[0])[:, None]
+                           & (cols % self.block_align == ph[1])[None, :])
+                    counts += c_phase * sel
+                    n_match += n_phase * sel
+                    wlogw += wl_phase * sel
                 continue
             c_phase = torch.zeros(b, V, h, w, device=device)
             n_phase = torch.zeros(b, h, w, device=device)
@@ -353,3 +414,40 @@ class AdaptiveWindowDiscreteScoreMachine(nn.Module):
             self.trace.append((float(masked.float().mean()),
                                float(kmap[masked].mean())))
         return chosen
+
+
+def locally_valid_fraction(machine, grids, k: int, vocab_size: int, pad_mode: str = 'outside'):
+    """Fraction of ``grids`` all of whose ``k x k`` windows are in the patch table.
+
+    Separates the two ways the machine can emit an ungrammatical grid. If a grid
+    is *not* locally valid the sampler left the table: smoothing let it place a
+    token no training window supports, so the failure is the sampler's. If it is
+    locally valid but ungrammatical, the table itself admits it -- that is the
+    ceiling, the quantity ``rhm_straddle.py`` enumerates exactly at ``L=2``.
+
+    Only meaningful for the pooled (``block_align = 1``) machine, whose table is
+    a single set of windows.
+    """
+    g = torch.as_tensor(np.asarray(grids), dtype=torch.long)
+    d = k // 2
+    if pad_mode == 'outside':
+        g = F.pad(g[:, None], (d, k - 1 - d, d, k - 1 - d), value=vocab_size)[:, 0]
+    w = g.unfold(1, k, 1).unfold(2, k, 1).reshape(g.shape[0], -1, k * k)
+    # the table back as token ids: the one-hot was built from them
+    tab = machine.patch_onehot_0.argmax(dim=1).reshape(-1, k * k).cpu()
+
+    # base v+1 in two halves -- (v+1)**49 overflows one int64 at k=7
+    half = (k * k + 1) // 2
+    base = vocab_size + 1
+    p_lo = base ** torch.arange(half, dtype=torch.long)
+    p_hi = base ** torch.arange(k * k - half, dtype=torch.long)
+
+    def key(x):
+        return torch.stack([(x[..., :half] * p_lo).sum(-1), (x[..., half:] * p_hi).sum(-1)], -1)
+
+    # membership on the two-word keys, as a hash set: the table has up to a few
+    # million rows and the query only a few tens of thousands
+    tabset = set(map(tuple, key(tab).tolist()))
+    wk = key(w).tolist()                                     # (N, npos, 2)
+    ok = [all(tuple(q) in tabset for q in row) for row in wk]
+    return float(np.mean(ok))

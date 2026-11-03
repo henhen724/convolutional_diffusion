@@ -36,7 +36,8 @@ from src.utils.discrete_score import ScheduledDiscreteScoreMachine, cosine_mask_
 from src.utils.random_hierarchy import RandomHierarchyModel2D
 from src.utils.rhm_grammar import evaluate_samples
 from src.utils.rhm_sampling import (AdaptiveWindowDiscreteScoreMachine,
-                                    PatchCountDiscreteScoreMachine)
+                                    PatchCountDiscreteScoreMachine,
+                                    locally_valid_fraction)
 
 
 def run_cell(rhm, P, k, n_gen, nsteps, device, seed, schedule, alpha_smooth, gen_batch,
@@ -79,6 +80,10 @@ def run_cell(rhm, P, k, n_gen, nsteps, device, seed, schedule, alpha_smooth, gen
     res.update(P=int(P), k='adapt' if k_adapt else int(k), n_distinct_patches=machine.n_distinct,
                n_patches_total=machine.n_patches_total, seconds=round(time.time() - t0, 1),
                train_distinct=int(len(set(map(bytes, train_grids.astype(np.int8))))))
+    if not k_adapt and block_align <= 1:
+        # splits an ungrammatical output into "the sampler left the patch table"
+        # and "the table itself admits this grid" -- the second is the ceiling
+        res['locally_valid'] = locally_valid_fraction(machine, grids, k, rhm.v, pad_mode)
     if k_adapt:
         # k(t) as the entropy floor actually chose it, binned by masked fraction,
         # so the schedule can be read off rather than assumed
