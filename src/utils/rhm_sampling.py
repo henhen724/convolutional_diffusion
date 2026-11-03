@@ -154,8 +154,16 @@ class PatchCountDiscreteScoreMachine(nn.Module):
         return (getattr(self, f'patch_onehot_{idx}'), getattr(self, f'patch_weight_{idx}'),
                 getattr(self, f'patch_center_{idx}'), getattr(self, f'patch_nout_{idx}'))
 
-    def forward(self, t, xt: torch.Tensor, label=None, device=None, k: Optional[int] = None):
-        """(B, V, H, W) posterior over the true token at every site."""
+    def forward(self, t, xt: torch.Tensor, label=None, device=None, k: Optional[int] = None,
+                return_match: bool = False):
+        """(B, V, H, W) posterior over the true token at every site.
+
+        ``return_match`` additionally returns the (B, H, W) count of training
+        patches that matched the window at each site. A site with no match is
+        running on the smoothing prior alone, which
+        :class:`AdaptiveWindowDiscreteScoreMachine` has to tell apart from a
+        genuinely flat posterior.
+        """
         device = self.patch_onehot_0.device
         k = self.kernel_size if k is None else k
         d = k // 2
@@ -199,6 +207,9 @@ class PatchCountDiscreteScoreMachine(nn.Module):
 
         counts = torch.zeros(b, V, h, w, device=device)
         n_match = torch.zeros(b, h, w, device=device)
+        # sum of w log w over matching patches, for the entropy of the posterior
+        # over *which* training patch matched (see AdaptiveWindow, h_mode='match')
+        wlogw = torch.zeros(b, h, w, device=device)
         rows = torch.arange(h, device=device)
         cols = torch.arange(w, device=device)
         for idx, ph in enumerate(self.phases):
@@ -207,6 +218,7 @@ class PatchCountDiscreteScoreMachine(nn.Module):
                 continue
             c_phase = torch.zeros(b, V, h, w, device=device)
             n_phase = torch.zeros(b, h, w, device=device)
+            wl_phase = torch.zeros(b, h, w, device=device)
             for i in range(0, onehot.shape[0], self.chunk):
                 pw = onehot[i:i + self.chunk]
                 agree = F.conv2d(xt_pad, pw)                                  # (b, np, h, w)
@@ -217,8 +229,12 @@ class PatchCountDiscreteScoreMachine(nn.Module):
                 match = match * weight[i:i + self.chunk][None, :, None, None]
                 c_phase += torch.einsum('bphw,pv->bvhw', match, center[i:i + self.chunk])
                 n_phase += match.sum(dim=1)
+                # match already carries the weight, so match * log(weight) is w log w
+                wl_phase += (match * weight[i:i + self.chunk].clamp_min(1e-12)
+                             .log()[None, :, None, None]).sum(dim=1)
             if self.block_align <= 1:
                 counts, n_match = counts + c_phase, n_match + n_phase
+                wlogw = wlogw + wl_phase
             else:
                 # the table was keyed by the site each window predicts, so the
                 # output site's own coordinates select it
@@ -226,6 +242,114 @@ class PatchCountDiscreteScoreMachine(nn.Module):
                        & (cols % self.block_align == ph[1])[None, :])
                 counts += c_phase * sel
                 n_match += n_phase * sel
+                wlogw += wl_phase * sel
 
         posterior = (counts + self.alpha_smooth) / (n_match[:, None] + self.alpha_smooth * V)
-        return torch.where(obs[:, None].bool(), xt_onehot, posterior)
+        out = torch.where(obs[:, None].bool(), xt_onehot, posterior)
+        if not return_match:
+            return out
+        # H = log W - (sum_j w_j log w_j) / W, the entropy of the normalized
+        # weights of the training patches this window matched
+        safe_n = n_match.clamp_min(1e-12)
+        h_match = torch.where(n_match > 0, safe_n.log() - wlogw / safe_n,
+                              torch.zeros_like(n_match))
+        return out, n_match, h_match
+
+
+class AdaptiveWindowDiscreteScoreMachine(nn.Module):
+    """LS machine whose window size is chosen per site, per step, by entropy.
+
+    A fixed ``k`` is the wrong object. Along a reverse-erasure trajectory the
+    number of observed sites inside a window only grows, so the posterior that
+    window induces only sharpens: a window that is safely informative while most
+    of the grid is masked ends up, near the end of the trajectory, matching a
+    single training patch. Its posterior entropy is then zero and the machine is
+    copying -- grammatical, because training grids are, and never novel.
+
+    hshunt's criterion is to take the largest length scale whose posterior
+    entropy is still above a floor. Because entropy falls with both ``k`` and
+    time, that makes ``k`` *shrink* along the trajectory: coarse scales are
+    resolved while there is still enough ambiguity to support them, fine scales
+    last. The floor is what keeps the machine off the memorizing branch.
+
+    At each site the chosen window is the largest ``k`` that both matched at
+    least one training patch and left entropy at least ``h_min`` nats; if none
+    qualifies the smallest ``k`` is used, which is the most conservative
+    available posterior. ``no match`` has to be excluded explicitly: with
+    smoothing, a window matching nothing returns the uniform posterior, whose
+    entropy is *maximal*, so an entropy test alone would prefer exactly the
+    windows that know nothing.
+
+    Which entropy is the right one is not obvious, so ``h_mode`` selects it and
+    the sweep decides:
+
+    ``'token'``
+        entropy of the predicted-token posterior. This is the literal reading,
+        but it penalises a window that is confident *and right*: many training
+        patches matching and all agreeing is generalization, not memorization,
+        and a floor of 0.2 nats on this quantity drops grammaticality from 0.71
+        to 0.03 at v=2, m=3, L=2 by forcing the machine down to k=1.
+    ``'match'``
+        entropy of the posterior over *which* training patch matched,
+        ``log W - (sum_j w_j log w_j) / W``. This is the memorization signal
+        proper: it goes to zero exactly when one training patch explains the
+        window, whatever the token posterior looks like.
+
+    ``trace`` records ``(masked fraction, mean chosen k)`` per call, which is
+    the k(t) schedule the criterion induces rather than one imposed by hand.
+    """
+
+    def __init__(
+        self,
+        grids,
+        vocab_size: int,
+        kernel_sizes,
+        h_min: float,
+        h_mode: str = 'match',
+        mask_token: Optional[int] = None,
+        alpha_smooth: float = 1.0,
+        device=None,
+        chunk: int = 8192,
+        block_align: int = 1,
+        pad_mode: str = 'outside',
+    ):
+        super().__init__()
+        self.kernel_sizes = sorted(int(k) for k in kernel_sizes)
+        self.vocab_size = vocab_size
+        self.h_min = float(h_min)
+        if h_mode not in ('token', 'match'):
+            raise ValueError(f"h_mode must be 'token' or 'match', got {h_mode!r}")
+        self.h_mode = h_mode
+        self.mask_token = vocab_size if mask_token is None else mask_token
+        self.machines = nn.ModuleList([
+            PatchCountDiscreteScoreMachine(
+                grids, vocab_size=vocab_size, kernel_size=k, mask_token=mask_token,
+                alpha_smooth=alpha_smooth, device=device, chunk=chunk,
+                block_align=block_align, pad_mode=pad_mode)
+            for k in self.kernel_sizes
+        ])
+        self.n_distinct = sum(mm.n_distinct for mm in self.machines)
+        self.n_patches_total = sum(mm.n_patches_total for mm in self.machines)
+        self.trace = []
+
+    def forward(self, t, xt: torch.Tensor, label=None, device=None):
+        masked = (xt.to(self.machines[0].device) == self.mask_token)
+        chosen = None
+        kmap = None
+        for k, mach in zip(self.kernel_sizes, self.machines):
+            post, n_match, h_match = mach(t, xt, return_match=True)
+            if chosen is None:
+                chosen = post
+                kmap = torch.full_like(n_match, float(k))
+                continue
+            if self.h_mode == 'token':
+                h = -(post.clamp_min(1e-12) * post.clamp_min(1e-12).log()).sum(1)
+            else:
+                h = h_match
+            ok = masked & (n_match > 0) & (h >= self.h_min)
+            chosen = torch.where(ok[:, None], post, chosen)
+            kmap = torch.where(ok, torch.full_like(kmap, float(k)), kmap)
+        if masked.any():
+            self.trace.append((float(masked.float().mean()),
+                               float(kmap[masked].mean())))
+        return chosen
