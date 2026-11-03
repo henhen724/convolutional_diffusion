@@ -105,7 +105,7 @@ def page_tokenization(pdf, rhm, grid):
     pdf.savefig(fig); plt.close(fig)
 
 
-def page_traces(pdf, rhm, traces):
+def page_traces(pdf, rhm, traces, n_draws=6):
     fig = plt.figure(figsize=PAGE)
     fig.suptitle('Example traces: what the machine actually emits, parsed level by level',
                  fontsize=20, weight='bold')
@@ -125,8 +125,8 @@ def page_traces(pdf, rhm, traces):
         ax.set_title(label, fontsize=14)
         ax = fig.add_subplot(gs[1, c])
         ax.axis('off')
-        # the grid above is one draw; the fractions are over all 6 drawn with it
-        txt = 'parse, bottom up\n(mean of 6 draws):\n'
+        # the grid above is one draw; the fractions are over all drawn with it
+        txt = f'parse, bottom up\n(mean of {n_draws} draws):\n'
         names = ['leaves', '2x2 blocks', '4x4 blocks', 'whole grid']
         for lvl, nm in zip(lv, names):
             mark = 'OK ' if lvl >= 0.999 else 'XX '
