@@ -46,3 +46,12 @@ holds the live state.
 - **What it did answer:** why success peaks at k=11, not U1=15. H_tot falls 11.82 -> 8.21 nats
   over k=3..17 and copies are the low-entropy trajectories (-1.75 nats 1D / -7.42 2D, 84%/100%).
   Caveat: 2D per-cell peak estimates scatter 4.8x; only the population median (1.2x) is sound.
+- **Patch-size criterion, scored on the real eval (re-read of 50903583, then 51098252).** Largest
+  `k` above an entropy floor loses to the best fixed `k` in 20/21 cells (ratio 0.672) because it
+  moves toward copying (gram +0.307, novel -0.362); its floor loses to `h_min=0` in 21/21.
+- **One variable: forbid `k < U1`.** The best floor becomes a *binding* one in 15/15 cells (was
+  0/21) and beats the old machine 15/15 (ratio 1.140) -- but still loses to fixed `k=U1=3` in
+  12/15 (0.775). Registered prediction half confirmed; its null stands: at L=2, U1 is the schedule.
+- `k(t)` shrinks monotonically along every trajectory at every floor (hshunt's direction, produced
+  not imposed). Deck + notebook `rhm_adaptive_window_2026-11-04.ipynb` sent. Next: the int64
+  overflow in the `a_j` window code, which is what blocks a real schedule test at L=3 (`U1=7`).
