@@ -334,10 +334,11 @@ def page_conclusion(pdf, cmp15):
         ('4. It still loses to simply fixing k = U1 (12/15 cells, median ratio 0.775).',
          'So at L = 2 the honest answer is the null: U1 already is the schedule. The criterion '
          'earns its keep against other adaptive machines, not against the fixed window.'),
-        ('5. The test is thin where it matters, and that is the next experiment.',
-         'Above U1 at L = 2 there are only two rungs, 3 and 5. A schedule has nowhere to go. L = 3 '
-         'has U1 = 7 and real room, but its k = 7 tables overflow the int64 window code -- fixing '
-         'that is the prerequisite for a fair test, and it is now the top of the queue.'),
+        ('5. s = 2 could never have been a fair test, and that is the next experiment.',
+         'At s = 2, U1 = 2^L - 1 is exactly (grid side - 1): the only odd window in [U1, side] is U1 '
+         'itself, at every depth -- 4x4 -> {3}, 8x8 -> {7}, 16x16 -> {15}. s = 3, L = 2 is 9x9 with '
+         'U1 = 5 and three real rungs, 5 / 7 / 9 (grammaticality 0.000 / 0.086 / 0.312 at P = 1000). '
+         'Running as job 51106614.'),
     ]
     y = 0.845
     for head, body in txt:

@@ -20,11 +20,13 @@
 # success with it, 0.166 -> 0.040.
 #
 # k = 1 and 2 are below U1 = 2 s^(L-1) - 1 = 3, the smallest window that can
-# contain a complete top-level child block. A window under U1 cannot see the
-# root, so it cannot be grammatical at any P, and letting the entropy floor
-# select one spends the whole grammaticality budget to buy novelty that is then
-# worthless. Removing k=1 leaves the floor free to trade 5 against 3 and no
-# lower.
+# contain a complete top-level child block, so they cannot see the root in one
+# look. Corrected 2026-11-04: that does not make them grammatical at zero -- in
+# 1D at n=16 a k=3 window still scores 0.06, because overlapping windows chain
+# constraints, and the 1D success optimum sits at k=11, below U1=15. The claim
+# here is only the measured one for this 2D L=2 machine: letting the floor reach
+# below U1 spends most of the grammaticality budget to buy novelty. Removing k=1
+# leaves the floor free to trade 5 against 3 and no lower.
 #
 # Prediction: with k_set = {3, 5} a binding floor beats both the h_min=0 control
 # and fixed k=3, because the novelty gain survives and the collapse does not
