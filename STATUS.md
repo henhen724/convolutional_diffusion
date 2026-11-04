@@ -66,10 +66,13 @@ Third depth for `exp(Theta(n))`: in 1D the root-reaching window `k = 2s^(L-1)-1 
 
 ## Next steps
 
-1. Notebook + deck for C, then upload. Must include traces and the tokenization.
-2. Test C's window-coverage mechanism: sweep `k` below U=1 in 2D and see whether `x*`
-   falls as `k^2/n` rises. That would unify 1D and 2D under coverage rather than dimension.
-3. The pooling-costs-the-sampler page (open problem 3), measurement already in hand.
+1. **Test C's coverage hypothesis** -- the one open "why". Sweep `k` *below* U=1 in 2D and
+   see whether `x*` falls as coverage `k^2/n` rises. If it does, 1D and 2D are one law in
+   coverage, not two in dimension, and the 0.21 becomes a coverage-specific constant.
+2. The pooling-costs-the-sampler page (open problem 3), measurement already in hand.
+
+Done 11-03: C's notebook (`notebooks/rhm_1d_depth_2026-11-03.ipynb`) and 8-page deck, both
+committed (`59b8491`) and on OneDrive.
 
 ## Discipline notes
 
