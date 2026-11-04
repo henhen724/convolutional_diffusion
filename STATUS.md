@@ -5,47 +5,48 @@
 
 ## A. RHM sampling complexity -- the answer, 2026-11-03
 
-How many training grids `P` before the LS machine emits grids **both novel and fully
-grammatical**, and how does `P*` scale?
+`P` = training grids before the LS machine emits grids **both novel and fully grammatical**.
 
 > **`P* = 0.21 |R_L| = Theta(v m^((n-1)/(s^2-1))) = exp(Theta(n))`**, `n = s^(2L)` sites.
 
-Measured, not derived; the 11-02 `C(k) = f0^U` ceiling stays retracted. Full write-up in
-`notebooks/rhm_sampling_complexity_2026-11-03.ipynb` and the 7-page deck (both committed).
-
-1. **Collapse.** 30 bracketed peaks, L in {2,3}, v in {2,3,4,6,8}, m in {2..6}, 3 seeds.
-   `|R_L|` spans 49 152x and `P*` 63 851x, but `P*/|R_L|` only 11.9x (median 0.197,
-   geo-sd 1.95x). Free fit `|R_L|^0.965 +- 0.041`; `b=1` fits no worse. Rules are drawn
-   *with replacement*, so same-(v,m) seeds differ 20x in `|R_L|` -- hence a collapse.
+Measured, not derived; the 11-02 `C(k) = f0^U` ceiling stays retracted. Write-up in
+`notebooks/rhm_sampling_complexity_2026-11-03.ipynb` + 7-page deck, committed and sent.
+1. **Collapse.** 30 bracketed peaks (L 2-3, v 2-8, m 2-6, 3 seeds): `|R_L|` spans 49 152x
+   and `P*` 63 851x, `P*/|R_L|` only 11.9x (median 0.197, geo-sd 1.95x). Free fit
+   `|R_L|^0.965 +- 0.041`. Rules drawn *with replacement*, so seeds differ 20x in `|R_L|`.
 2. **Window bound.** Root needs `k >= 2 s^(L-1) - 1`. At L=3, k=5 the table saturates at
    exactly `N_5 = 92080` yet grammaticality never tops 0.7%; k=7 reaches 25-52%.
-3. **Mechanism.** `P(novel|gram)` fits `exp(-0.725x - 0.868)` in `x = P/|R_L|` over 488
-   cells vs `exp(-x)` for uniform: only 42% of grammatical outputs are novel as x -> 0.
-4. **Peak height, honestly.** Median peak success 0.022 (0.001-0.342): the law locates
-   the optimum, the optimum is not good.
-5. **Straddling (hshunt's question) -- confirmed, see B.**
+3. **Mechanism.** `P(novel|gram)` fits `exp(-0.725x - 0.868)`, `x = P/|R_L|`, 488 cells,
+   vs `exp(-x)` for uniform: only 42% of grammatical outputs are novel as x -> 0.
+   Median peak success is only 0.022 (0.001-0.342): the law locates the optimum, the
+   optimum is not good.
 
 ## B. Straddling windows see two levels up, 2026-11-03
 
 `j* = floor(log_s((k+1)/2))` is the deepest level a `k x k` window contains. Ensemble
 `E_j` tiles the grid with independent uniform draws from `R_j` (coherent to level `j`,
-scrambled above); `a_j` = fraction whose every window is in the saturated window set `W`.
-`a_L = 1` is the saturation check and holds exactly.
+scrambled above); `a_j` = fraction whose every window is in the saturated window set `W`;
+`a_L = 1` is the saturation check. Job 50996974 (00:01:57), 160 cells, 146 saturated (the
+14 that are not are all L=3 k=5 m=3). Deck `straddle_levels_slides.pdf`.
 
-- **L=3, v2 m2, k=5** (`j* = 1`): `a_1 = 0.003`, **`a_2 = 0.57`**, `a_3 = 1.000`. A 5x5
-  window, which only contains 2x2 blocks, rejects 43% of grids already coherent through
-  level 2 -- it polices the *root*, two levels above `j*`. Exactly hshunt's conjecture.
-  `|W| = 92080` reproduces the exact `N_5`, so `W` is provably complete.
-- **L=3, v2 m2, k=3**: `a_1 = a_2 = 1.000`. No straddle power at L=3 though plenty at
-  L=2 -- the signal dies as the grammar above `j*` gets richer.
-- Validated against the exact L=2 enumeration: Monte-Carlo `a_{j*}` matches
-  `lv_pooled/lv_blocks` to 0.01-0.35%, and no symbol is unreachable in any grammar swept.
+- **L=3, k=5** (`j* = 1`): **all 16 saturated grammars see two levels up.** Median
+  `a_2 = 0.10` (v2m2 0.65, v3m2 0.10, v4m2 0.03): a 5x5 window containing only 2x2 blocks
+  rejects ~90% of grids *already coherent through level 2* -- it polices the root.
+  hshunt's conjecture, and not the "small signal" expected.
+- **L=3, k=3**: 19/30 see two levels up, 4 one, 7 none. v2m2 `a_1` ranges 0.392-1.000 over
+  5 seeds -- the same (v,m,k) reaches the root on one grammar, stops at the blocks on another.
+- **Strength falls monotonically in m** (`1 - a_{L-1}`, L=2 k=3): 0.77, 0.58, 0.38, 0.30,
+  0.11 for m=2..6; k=5 decays far slower (0.80 -> 0.58). More synonyms = more legal
+  boundary pairs = fewer detectable scrambles.
+- Validated on 75 L=2 cells against exact enumeration: `a_{j*}` matches
+  `lv_pooled/lv_blocks` to <=1.2% rel, `|W|` reproduces the exact `N_k`, `a_L = 1.0000`
+  everywhere, no symbol unreachable in any of the 150 grammars.
+- Caveat: `a_j` is the *support* an infinite-data machine defines, not what a finite-`P`
+  sampler emits (A.4 is lower).
 
 ## Running jobs
 
-- **50996974** `rhm_straddle_levels.sbatch` -- `a_j` profiles, L=2 (v2,v3, m2-6) with the
-  exact cross-check and L=3 (v2-4, m2-3), k in {3,5}, 5 seeds. ~2-4 h. 50935971 and
-  50976107 COMPLETED; deck is on OneDrive.
+- None. 50935971, 50976107, 50996974 all COMPLETED; both decks are on OneDrive.
 
 ## Open problems
 
@@ -58,5 +59,7 @@ scrambled above); `a_j` = fraction whose every window is in the saturated window
 
 ## Next steps
 
-1. When 50996974 lands: notebook + 2 deck pages on the `a_j` profile vs (v, m, k, L).
-2. Then the 1D RHM depth probe at L=4-5, as a cheap third point for `exp(Theta(n))`.
+1. 1D RHM depth probe at L=4-5, as a cheap third point for `exp(Theta(n))`. 1D needs only
+   `k >= 2 s^(L-1) - 1` in one dimension, so the int64 code survives to deeper `L`.
+2. The pooling-costs-the-sampler page (open problem 3), which is a measurement already in
+   hand and only needs writing up.
