@@ -35,3 +35,14 @@ holds the live state.
   rather than raising `--mem`: host RSS is flat in depth (0.99/1.02/1.06 GB at L=2/3/4), GPU peak
   0.11/0.33/1.17 GB as the `P*d*k` window tensor predicts. Capped `exact_RL` at 1e6 words checked
   in both loops + a nominal pre-guard; the killer cells now run in 3.7 s at 0.69 GB.
+
+## 2026-11-04
+- Coverage deck finished and sent (7 pages; 2.3x text reconciled, page-5 annotation and title
+  overflow fixed). Entropy-budget test run as jobs 51073161 + 51076386: 988 1D rows, all 25
+  bracketed 2D L=2 cells, 75 bracketed peaks, both dimensions on one instrument for the first time.
+- **Third refutation.** `x* = exp(H_tot)/|R_L|` makes the 1D/2D gap 496x where it measures 1.92x
+  (258x worse); novelty law off 2.06x/597x; peak 32.6x below the `H_tot = ln P` crossing; pooled
+  `ln P* = 0.100 H + 4.18`, slope 0.10 where the claim needs 1. Registered prediction, refuted.
+- **What it did answer:** why success peaks at k=11, not U1=15. H_tot falls 11.82 -> 8.21 nats
+  over k=3..17 and copies are the low-entropy trajectories (-1.75 nats 1D / -7.42 2D, 84%/100%).
+  Caveat: 2D per-cell peak estimates scatter 4.8x; only the population median (1.2x) is sound.

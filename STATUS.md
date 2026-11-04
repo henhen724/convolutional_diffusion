@@ -1,72 +1,60 @@
 # STATUS
 
-**RHM sampling complexity** is answered (due 12:00 PT Fri 11/6); **MLS** is parked
-(LOG.md, `notebooks/mls_entropy_barrier_results.ipynb`).
+**RHM sampling complexity** is answered and delivered (was due 12:00 PT Fri 11/6).
+**MLS** is parked on hshunt's corrected layer-2 posterior (LOG.md, `notebooks/mls_entropy_barrier_results.ipynb`).
 
-## A. RHM sampling complexity -- the answer
+## A. The answer
 
 `P` = training samples before the LS machine emits output **both novel and fully grammatical**.
 
-> **`P* = exp(Theta(n))`, `n` = sites. In 2D specifically, `P* = 0.21 |R_L|`.**
+> **`P* = exp(Theta(n))`, `n` = sites. At the U=1 window in 2D, `P* = 0.21 |R_L|`.**
 
-Measured, not derived; the 11-02 `C(k) = f0^U` ceiling stays retracted. Deck + notebook
-`rhm_sampling_complexity_2026-11-03.ipynb` sent. Full detail in LOG 11-03.
-1. **2D collapse.** 30 bracketed peaks: `|R_L|` spans 49 152x, `P*` 63 851x, the ratio only
-   11.9x (median 0.197). Free fit `|R_L|^0.965 +- 0.041`. Rules drawn *with replacement*.
-2. **Window bound.** Root needs `k >= 2s^(L-1)-1`. At L=3, k=5 the table saturates at exactly
-   `N_5 = 92080` yet grammaticality never tops 0.7%; k=7 reaches 25-52%.
-3. **Mechanism.** `P(novel|gram) ~ exp(-0.725x - 0.868)` vs `exp(-x)` for uniform. Median peak
-   success only 0.022 -- the law locates the optimum; the optimum is not good.
-4. **Scope (from C):** the `0.21` is a 2D constant. Only `exp(Theta(n))` is general.
+Measured, not derived; the `C(k) = f0^U` ceiling stays retracted. 30 bracketed 2D peaks
+collapse to median 0.197 while `|R_L|` spans 49 152x; in 1D `ln P*` grows 0.374/site over
+n=4..16 but `P* = Theta(|R_L|)` fails (`b = 0.689 +- 0.045`), so only `exp(Theta(n))` is general.
+Root needs `k >= 2s^(L-1)-1`; straddling windows do see two levels up (hshunt's conjecture).
 
-## B. Straddling windows see two levels up
+## B. The open question: why x* = P*/|R_L| differs by dimension
 
-Ensemble `E_j` tiles the grid with independent draws from `R_j`; `a_j` = fraction whose every
-window lies in the saturated set `W`. **At L=3, k=5 (`j*=1`) all 16 saturated grammars see two
-levels up**, median `a_2 = 0.10` -- hshunt's conjecture, far bigger than the expected "small
-signal". Strength falls monotonically in m (0.77 -> 0.11, m=2..6). Validated against exact
-enumeration on 75 L=2 cells (<=1.2% rel err). Deck sent; detail in LOG 11-03.
-Caveat: `a_j` is the support an infinite-data machine defines, not finite-`P` output.
+Head-to-head on one instrument at n=16: **1D 0.083 (k=U1=15), 2D 0.159 (25 cells), 1.92x apart.**
+Three explanations tested, **all three refuted**:
+1. **Coverage -- sign backwards** (51058208, deck sent 11-04). `x*` *rises* with coverage
+   (Spearman +1.00); matching on it leaves 5.1x where matching on `n` leaves 2.3x.
+2. **Table saturation `y* = P* n/N_k`** -- 4.4x across dimensions and 61x across k within 1D.
+3. **Posterior-entropy budget -- refuted 11-04** (51073161, 51076386; notebook + deck sent).
+   `x* = exp(H_tot)/|R_L|` gives 1D 0.68 / 2D 337.6 = **496x apart, 258x worse**. Novelty law
+   off 2.06x / 597x; peak 32.6x below the `H_tot = ln P` crossing; pooled
+   `ln P* = 0.100 H + 4.18` (residual 5.5x) where the claim needs slope 1.
 
-## C. 1D depth probe -- the 0.21 is 2D-specific
+**What (3) did establish -- why success peaks at k=11, not U1=15.** H_tot falls 11.82 -> 8.21
+nats over k=3..17 at n=16 (no feature at U1) as grammaticality rises 0.06 -> 0.78 and novelty
+falls 1.00 -> 0.52; copies are the low-entropy trajectories, -1.75 nats in 1D (84% of 781 runs)
+and -7.42 in 2D (100%). The window is bought with the currency novelty needs: block structure
+says where a window *can* be grammatical, entropy says where it *should* sit. Aside, no theory:
+`exp(H)/|R_L|` = 0.68 in 1D vs 338 in 2D, so 2D is grammar-limited and 1D novelty-limited.
 
-In 1D the root-reaching window `k = d-1` is 15 *sites* at L=4, so n = 4, 8, 16 are all reachable.
-113 cells x 19 P, 110 bracketed; same machine semantics as 2D. Notebook + 8-page deck sent.
-
-- **`exp(Theta(n))` confirmed at a third depth**: `ln P*` grows 0.374/site over n=4..16.
-- **But `P* = Theta(|R_L|)` fails in 1D**: `b = 0.689 +- 0.045` robust (ladder-floor cells and
-  n=4 dropped), 6.8 sd below 1. 2D was `0.965 +- 0.041`.
-- **Matched-n control (decisive).** 1D L=4 and 2D L=2 both have n=16: `x*` = 0.050 vs 0.193,
-  **3.9x apart**, while 2D is flat in n (1.08x over a 4x change). So not an n effect.
-- Hypothesis, untested: at n=16 a U=1 window covers 94% of a 1D string but 56% of a 2D grid,
-  so the 1D machine is near whole-string lookup. Fits its peak success 0.49 vs 2D's 0.022.
-- **Retracted:** a joint `x* ~ n^-0.154` fit across dimensions -- it averages a flat 2D series
-  against a falling 1D one.
-
-## Running jobs
-
-- None. 50935971, 50976107, 50996974 COMPLETED. 51009204 OOM'd *after* finishing all 113 cells,
-  inside `exact_RL` on cells it was about to skip; data intact, cap patched.
+## Running jobs — none
 
 ## Open problems
 
-- 2D L=4 needs k=15, out of table reach; 2D itself still rests on two depths (1D gives three).
-  One L=3 curve unbracketed (v3m2 rs0, `x* >= 0.477`).
-- `k >= 7` unreachable for `a_j`: a base-(v+1) code of `k*k` digits overflows int64.
+- The 1D/2D offset has no mechanism after three refutations. No fourth without a measurement.
+- 2D peak estimates scatter 4.8x per cell (2048 gens, 3-point parabola on a doubling ladder),
+  though population medians reproduce to 1.2x: raise n_gen before quoting a single cell.
+- 2D L=4 needs k=15, out of table reach; 2D rests on two depths. One L=3 curve unbracketed
+  (v3m2 rs0, `x* >= 0.477`). `k >= 7` overflows the int64 window code for `a_j`.
 - Pooled-vs-per-phase gap (3-4x) far exceeds their support gap (1.04-1.38x): pooling costs the
-  *sampler*, not the support. Worth a page.
+  *sampler*. Measurement in hand, page unwritten.
 - **Blocked on hshunt (MLS):** the corrected layer-2 posterior. Nothing MLS runs until it lands.
 
 ## Next steps
 
-1. **Test C's coverage hypothesis** -- the one open "why". Sweep `k` *below* U=1 in 2D and see
-   whether `x*` falls as coverage `k^2/n` rises. If it does, 1D and 2D are one law in coverage
-   rather than two in dimension, and 0.21 becomes a coverage-specific constant.
-2. The pooling-costs-the-sampler page, measurement already in hand.
+1. Score `AdaptiveWindowDiscreteScoreMachine` (`src/utils/rhm_sampling.py`; picks k per site
+   and step off an `h_min` floor) against novel-and-grammatical -- so far only scored on
+   grammaticality. hshunt's standing patch-size question; B(3) says the floor is the right knob.
+2. The pooling-costs-the-sampler page.
 
 ## Discipline notes
 
-- Analysis runs in an allocation (`srun -p sganguli -t 15 -c 2 --mem=16G ...`), never on a login
-  node -- a numpy sweep over `results/` was SIGKILLed there on 11-03.
-- Measurement footprint is flat in depth (host RSS 0.99/1.02/1.06 GB at L=2/3/4). Memory risk
-  lives in `exact_RL`, which scales with nominal `v*m^M`, not with the measurement.
+- Analysis runs in an allocation (`srun -p sganguli -t 15 -c 2 --mem=16G`), never a login node.
+- `rhm_entropy_analysis.py`'s `geo()` returns the **median**, not a geometric mean (1.5-1.7x).
+- Footprint flat in depth (~1 GB host); risk lives in `exact_RL`. sganguli CPU-starved: few cpus.

@@ -41,7 +41,7 @@ def med(x):
     return float(np.median(x)) if len(x) else float('nan')
 
 
-def page_tokenization(pdf):
+def page_tokenization(pdf, closing='which is the whole story of this deck.'):
     """What a token is, what one sample is, and what one window covers.
 
     Kept first because every later plot counts *tokens* and *windows*, and the
@@ -102,7 +102,7 @@ def page_tokenization(pdf):
         'match training windows framed the same way.',
         'k = 2s^(L-1) - 1 is the smallest window that fully contains the top-level block, '
         'i.e. the smallest one that can see the root. In 1D that is d - 1 at every depth, '
-        'which is the whole story of this deck.',
+        + closing,
     ], width=118, size=12)
     pdf.savefig(fig); plt.close(fig)
 
