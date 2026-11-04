@@ -5,8 +5,8 @@
 
 ## A. RHM sampling complexity -- the answer, 2026-11-03
 
-How many training grids `P` before the LS machine emits grids that are **both novel and
-fully grammatical**, and how does `P*` scale?
+How many training grids `P` before the LS machine emits grids **both novel and fully
+grammatical**, and how does `P*` scale?
 
 > **`P* = 0.21 |R_L| = Theta(v m^((n-1)/(s^2-1))) = exp(Theta(n))`**, `n = s^(2L)` sites.
 
@@ -45,18 +45,16 @@ scrambled above); `a_j` = fraction whose every window is in the saturated window
 ## Running jobs
 
 - **50996974** `rhm_straddle_levels.sbatch` -- `a_j` profiles, L=2 (v2,v3, m2-6) with the
-  exact cross-check and L=3 (v2-4, m2-3), k in {3,5}, 5 seeds. ~2-4 h.
-- 50935971, 50976107 COMPLETED. Deck is on OneDrive.
+  exact cross-check and L=3 (v2-4, m2-3), k in {3,5}, 5 seeds. ~2-4 h. 50935971 and
+  50976107 COMPLETED; deck is on OneDrive.
 
 ## Open problems
 
-- L=4 would need k=15; the table is out of reach, so `exp(Theta(n))` rests on two depths
-  plus the exact `N_k = Theta(|R_L|)` counts. A cheaper probe would be a 1D RHM at L=4-5.
-- One L=3 curve is unbracketed (v3m2 rs0, still climbing at P=3e6, `x* >= 0.477`).
+- L=4 needs k=15, out of table reach, so `exp(Theta(n))` rests on two depths plus the
+  exact `N_k` counts. One L=3 curve is unbracketed (v3m2 rs0, `x* >= 0.477`).
 - `k >= 7` is unreachable for `a_j`: a base-(v+1) code of `k*k` digits overflows int64.
-- Measured grammaticality sits well below `R_L/lv_pooled` and the pooled-vs-per-phase gap
-  (3-4x) is far larger than their support gap (1.04-1.38x), so pooling costs the *sampler*,
-  not the support. Worth a page of its own.
+- Pooled-vs-per-phase measured gap (3-4x) far exceeds their support gap (1.04-1.38x), so
+  pooling costs the *sampler*, not the support. Worth a page of its own.
 - **Blocked on hshunt (MLS):** the corrected layer-2 posterior. Nothing MLS runs until it lands.
 
 ## Next steps
