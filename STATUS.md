@@ -38,9 +38,8 @@ scrambled above); `a_j` = fraction whose every window is in the saturated window
   `|W| = 92080` reproduces the exact `N_5`, so `W` is provably complete.
 - **L=3, v2 m2, k=3**: `a_1 = a_2 = 1.000`. No straddle power at L=3 though plenty at
   L=2 -- the signal dies as the grammar above `j*` gets richer.
-- Validated against the exact L=2 enumeration (`rhm_straddle.py`): Monte-Carlo `a_{j*}`
-  matches `lv_pooled/lv_blocks` to 0.01-0.35%. No symbol is unreachable in any of the
-  150 swept grammars, so `E_j` blocks all really occur (the script now enforces this).
+- Validated against the exact L=2 enumeration: Monte-Carlo `a_{j*}` matches
+  `lv_pooled/lv_blocks` to 0.01-0.35%, and no symbol is unreachable in any grammar swept.
 
 ## Running jobs
 
@@ -53,7 +52,7 @@ scrambled above); `a_j` = fraction whose every window is in the saturated window
 - L=4 needs k=15, out of table reach, so `exp(Theta(n))` rests on two depths plus the
   exact `N_k` counts. One L=3 curve is unbracketed (v3m2 rs0, `x* >= 0.477`).
 - `k >= 7` is unreachable for `a_j`: a base-(v+1) code of `k*k` digits overflows int64.
-- Pooled-vs-per-phase measured gap (3-4x) far exceeds their support gap (1.04-1.38x), so
+- Pooled-vs-per-phase measured gap (3-4x) far exceeds their support gap (1.04-1.38x):
   pooling costs the *sampler*, not the support. Worth a page of its own.
 - **Blocked on hshunt (MLS):** the corrected layer-2 posterior. Nothing MLS runs until it lands.
 
