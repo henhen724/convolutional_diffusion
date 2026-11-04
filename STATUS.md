@@ -4,9 +4,7 @@
 **MLS** is parked on hshunt's corrected layer-2 posterior (LOG.md, `notebooks/mls_entropy_barrier_results.ipynb`).
 
 ## A. The answer
-
 `P` = training samples before the LS machine emits output **both novel and fully grammatical**.
-
 > **`P* = exp(Theta(n))`, `n` = sites. At the U=1 window in 2D, `P* = 0.21 |R_L|`.**
 
 Measured, not derived; the `C(k) = f0^U` ceiling stays retracted. 30 bracketed 2D peaks collapse
@@ -14,7 +12,6 @@ to median 0.197 while `|R_L|` spans 49 152x; in 1D `ln P*` grows 0.374/site over
 `P* = Theta(|R_L|)` fails (`b = 0.689 +- 0.045`). Root needs `k >= U1 = 2s^(L-1)-1`.
 
 ## B. The open question: why x* = P*/|R_L| differs by dimension
-
 One instrument, n=16: **1D 0.083 (k=U1=15), 2D 0.159 (25 cells), 1.92x apart.** Three explanations,
 **all three refuted**:
 1. **Coverage -- sign backwards** (51058208, deck sent 11-04): `x*` *rises* with coverage
@@ -48,10 +45,13 @@ null stands: at s=2, U1 is the schedule. `notebooks/rhm_adaptive_window_2026-11-
 - **Blocked on hshunt (MLS):** the corrected layer-2 posterior. Nothing MLS runs until it lands.
 
 ## Next steps
-1. **51106614** `rhm_adapt_s3` (3h): first fair test. At s=2 `U1 = side - 1`, so the only odd rung
-   in `[U1, side]` is U1 at *every* depth -- s=2 can never test a schedule. s=3 L=2 is 9x9 with
-   rungs 5/7/9, not interchangeable (gram .000/.086/.312 at P=1e3, 51106057). Prediction in the
-   sbatch: with 3 rungs the floor beats the best fixed k in most of 12 cells. Null: fixed wins.
+1. **51106614** `rhm_adapt_s3` running (~2h left): the fair test. At s=2 `U1 = side - 1`, so the
+   only odd rung in `[U1, side]` is U1 at *every* depth -- s=2 can never test a schedule. s=3 L=2
+   is 9x9 with rungs 5/7/9. **First 2 of 12 cells reverse the s=2 verdict:** adaptive beats the
+   best fixed k 2/2, succ .414 vs .066 and .257 vs .012 (ratio ~22x); fixed optimum is k=7, not
+   U1=5; k(t) spans 9.0 -> 7.5, using the middle rung. But the best floor is `h_min=0` in both, so
+   what wins is "largest window that still has training support", not the entropy floor on top of
+   it. Score with `scripts/rhm_adaptive_s3_score.py`; deck + notebook when all 12 land.
 2. The pooling-costs-the-sampler page.
 
 ## Discipline notes
