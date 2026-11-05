@@ -15,6 +15,14 @@ Three questions, in the order they decide the verdict:
 3. Does the induced ``k(t)`` actually use the extra rungs, or does it collapse
    to two values again?  A schedule that only ever picks 9 then 5 has not used
    the room, and a win would then be about the choice set, not the schedule.
+4. Does the *floor* earn anything on top of the support test?  The machine
+   accepts a window when ``n_match > 0 and h >= h_min``
+   (``rhm_sampling.py:502``), and in ``h_mode='match'`` the entropy is
+   ``log W - (sum_j w_j log w_j) / W``, the log of the effective number of
+   matching training patches.  So ``h_min`` is a support-*diversity* floor and
+   ``h_min = 0`` is the bare support-*existence* test, the weakest member of the
+   same family.  Printing peak success against ``h_min`` separates "the largest
+   window with any support at all" from "hshunt's entropy criterion".
 
 Reads whatever ``s3_*_L2_v*_m*.json`` files exist, so it is safe to run against
 a sweep that is still filling in.
@@ -119,6 +127,27 @@ def main():
         print('    v%d m%d rs%d  h=%.1f  %s   (span %.2f)'
               % (r['v'], r['m'], r['rule_seed'], r['adapt_hmin'],
                  ' '.join('%.2f' % k for k in ks), max(ks) - min(ks)))
+
+    print('\n=== does the floor earn anything on top of the support test? ===')
+    hs = sorted(set(r['h_min'] for c in cells for r in by[c]['adapt']))
+    print('  peak success by h_min (h_min=0 is the bare n_match>0 test):')
+    print('  v  m rs | ' + ' '.join('h=%-6.2f' % h for h in hs))
+    cols = defaultdict(list)
+    for c in cells:
+        Ps = set(r['P'] for r in by[c]['adapt'])
+        for k, v in by[c].items():
+            if isinstance(k, int):
+                Ps &= set(r['P'] for r in v)
+        cells_h = []
+        for h in hs:
+            b = best([r for r in by[c]['adapt'] if r['P'] in Ps and r['h_min'] == h])
+            cells_h.append(b['success'] if b else float('nan'))
+            if b:
+                cols[h].append(b['success'])
+        print('  %d %2d %2d | ' % (c[0], c[3], c[4])
+              + ' '.join('%-8.4f' % x for x in cells_h))
+    print('  median  | ' + ' '.join('%-8.4f' % srt(cols[h]) for h in hs))
+    print('  -> the floor is a support-diversity floor; 0 is support-existence.')
 
     if args.out:
         o = ROOT / args.out
