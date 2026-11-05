@@ -40,6 +40,12 @@
 # and splits the gain into gain_dead + gain_graded.  No direction registered:
 # either split is a real finding, and I want the number before I claim which.
 #
+# Third pass: the second came back gain_graded = +0.000 in 18/18 -- the flag
+# carries the whole thing.  That only means "one bit" if nsr was gradeable in
+# the first place, so this pass adds frac_multi = P(nsr >= 2) and the nsr
+# histogram.  If frac_multi is near zero the claim collapses to "nsr is
+# binary here" and the dead/graded split says nothing.
+#
 # Standing caution from the last two rounds: my stated *mechanisms* have been
 # refuted twice (the n_words sign, and "gain grows with v"), while the
 # predictive claims held.  So k_by_tighter is printed as a diagnostic, not as

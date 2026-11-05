@@ -22,17 +22,19 @@ rungs 5/7/9) is the first fair test; **all 12 cells** (`rhm_patch_size_2026-11-0
 > **"Largest window matching any training patch at all" is the whole rule; nothing added to it helps.**
 
 ## D. The patch size is per-site, not a schedule -- answers "how are you setting it over time?"
-`rhm_k_schedule.py`: four matched arms, control schedule derived from the adaptive arm's *own* trace
-so it cannot be rigged. **9 cells, `rhm_ksched_score.py`: adaptive beats the bare schedule 9/9 and
-the best fixed k 9/9** (median 8.2x at v2, ~65x at v3/v4). The schedule recovers a median **15%** of
-adaptive success while spending the *same window budget* -- median mean-k gap 0.08. Capping the
-criterion to its own schedule is free at v2 but costs 8-30% at v3/v4 (within 20% in 5/9).
+`rhm_k_schedule.py`: four matched arms, control schedule derived from the adaptive arm's *own* trace so it cannot be rigged. **9 cells, `rhm_ksched_score.py`: adaptive beats the bare schedule 9/9 and the best fixed k 9/9** (median 8.2x at v2, ~65x at v3/v4). The schedule recovers a median **15%** of adaptive success at the *same window budget* (median mean-k gap 0.08); capping the criterion to its own schedule is free at v2, costs 8-30% at v3/v4.
 > **Time alone cannot set the patch size. What matters is which *site* gets which size.**
 `rhm_k_locality.py` says what the site signal is *not*: chosen k regressed on the site's offset within its level-1 block gives **R^2 = 0.000 in 18/18 runs**, adding nothing jointly with step either. Step alone explains 0.09-0.21 (v2), 0.22-0.36 (v3), 0.30-0.41 (v4), rising with `v`, falling with `P`.
-The local **revealed-neighbour count** (how many of the 9x9 around a site are fixed) beats step in
-18/18 and subsumes it -- adding step on top gains only .005-.013 -- so the schedule is a *consequence*
-of that count. But it caps at .47: the rest turns on *which* tokens were revealed, not how many.
+The local **revealed-neighbour count** (how many of the 9x9 around a site are fixed) beats step in 18/18 and subsumes it (adding step gains .005-.013), so the schedule is a *consequence* of that count. It caps at .47: the rest turns on *which* tokens were revealed, not how many.
 > **Position 0%, time <=41%, local reveal count <=47%, remainder >=53% genuinely content-dependent.**
+That residual is **grammar, mostly across block boundaries** (`rhm_k_crossblock.py`, 18/18): over
+(nrev, n_words, n_sym_local), the block's admissible-symbol count *after every other block
+constrains it through the root* adds **median +0.196 R^2** (+.116..+.294) net of a permutation null
+of +0.000; within-block control +0.002; the root tightens a block at 46-71% of observations, rising
+with `v`. **It is one bit, not a count** -- a bare "no root production survives every block at once"
+flag reproduces the gain to +0.000 in 18/18, so the straddling window runs the *consistency check*
+hshunt described rather than accumulating evidence. Unregistered: the sign on `k` **flips with `v`**
+(root-tightened site gets a shorter window at v=2, 6/6; longer at v=4, 6/6). No mechanism claimed.
 The caveat I raised from this against the 51153821 prediction was **wrong**: sched/adaptive does
 fall with `v` (.212 -> .140, non-monotone, 3 seeds/v). R^2 in k is not decision quality -- the
 schedule can explain more of k at high `v` and still pick wrong at the sites that cost the most.
@@ -50,7 +52,11 @@ schedule can explain more of k at high `v` and still pick wrong at the sites tha
 1. C+D deck + notebook **delivered** 2026-11-04 (`build_s3_slides.py`, `rhm_patch_size_2026-11-04.ipynb`, uploaded); re-render both on 51143385's now-completed ladder.
 2. **Done (51175489), 18/18 cells**: `n_words` (level-1 words still compatible with a site's own block) adds **median +0.107 R^2 over `nrev`**, clearing the registered .05 in **18/18**; block-fill control <= .006 everywhere. So the >=53% residual *is* grammatical ambiguity at the block scale, and it is not fill level wearing a grammar label.
    But the registered "gain grows with `v`" is **refuted**: it falls monotonically, .125 / .102 / .096 at v=2/3/4 (6 cells each). The stated mechanism was already refuted by the smoke cell (mean k *rises* with `n_words`, confounded with fill), which is why the gain is scored over `nrev`.
-3. Next on the residual: take it **across block boundaries**, where `n_words` by construction says nothing -- that is also where hshunt's straddling-consistency question lives.
+3. **Done (51197626 / 51198000 / 51198269), 18/18**: cross-block result in D. 51198269 adds only
+   the `frac_multi` substrate column that licenses the "one bit" wording.
+4. Refinement: redo `n_sym_root` as a `belief_propagation` posterior entropy, not a survivor count.
+   BP is exact on this tree, and a hard count degenerating to one bit is exactly what an entropy
+   would resolve -- it says whether the criterion tracks anything softer underneath.
 
 ## Discipline notes
 - Analysis runs in `srun -p sganguli -t 10 -c 2 --mem=4G`, never a login node; there `ml devel math

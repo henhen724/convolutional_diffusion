@@ -367,10 +367,99 @@ def page_locality(pdf, kl_rows):
     pdf.savefig(fig); plt.close(fig)
 
 
+def page_crossblock(pdf, xb):
+    """What the >=53% content residual of page 4 is made of."""
+    fig = plt.figure(figsize=PAGE)
+    fig.suptitle('5. The content residual is grammar consistency ACROSS blocks',
+                 fontsize=20, weight='bold')
+    xb = sorted(xb, key=lambda r: (r['v'], r['rule_seed'], r['P']))
+    net = [r['r2_full'] - r['r2_null'] for r in xb]
+    ctrl = [r['r2_base_nsl'] - r['r2_base'] for r in xb]
+    x = np.arange(len(xb))
+
+    ax = fig.add_axes([0.07, 0.56, 0.42, 0.31])
+    for v, c in ((2, '#3b4cc0'), (3, '#7b9ff9'), (4, '#b40426')):
+        sel = [i for i, r in enumerate(xb) if r['v'] == v]
+        ax.bar(x[sel], [net[i] for i in sel], 0.78, color=c, label='v = %d' % v)
+    ax.bar(x, ctrl, 0.78, color='#444',
+           label='same, but WITHIN the block')
+    ax.axhline(0.02, ls='--', c='#111', lw=1.2)
+    ax.text(0.4, 0.027, 'registered threshold 0.02', fontsize=8.5)
+    ax.set_xticks([]); ax.set_xlabel('cell (v x rule seed x P)')
+    ax.set_ylabel('$R^2$ added to (reveal count, n_words)')
+    ax.legend(frameon=False, fontsize=9)
+    ax.set_title('cross-block symbol count: %d/%d cells clear it'
+                 % (sum(1 for n in net if n >= 0.02), len(net)), fontsize=13)
+
+    ax2 = fig.add_axes([0.58, 0.56, 0.37, 0.31])
+    gd = [r.get('gain_dead') for r in xb]
+    if all(g is not None for g in gd):
+        gg = [r['gain_graded'] for r in xb]
+        ax2.bar(x, gd, 0.78, color='#777', label='binary "no root survives"')
+        ax2.bar(x, gg, 0.78, bottom=gd, color='#b40426',
+                label='graded symbol count on top')
+        ax2.set_ylabel('$R^2$ added'); ax2.legend(frameon=False, fontsize=9)
+        ax2.set_title('is it just "already doomed"?', fontsize=13)
+        ax2.set_xticks([]); ax2.set_xlabel('cell')
+        split = med([g / (d + g) for d, g in zip(gd, gg) if d + g > 0])
+        fm = med([r.get('frac_multi', float('nan')) for r in xb])
+        dead_line = (
+            'And it is ONE BIT, not a count. Replacing n_sym_root by the bare flag\n'
+            '"no root production survives every block at once" keeps a median %.0f%% of\n'
+            'the gain; grading the surviving count adds %.0f%% on top -- and that is not\n'
+            'because the count had no room to grade: it is >= 2 at a median %.0f%% of\n'
+            'observations. So the straddling window is running a CONSISTENCY CHECK,\n'
+            'which is what hshunt asked about, and not accumulating evidence.\n\n'
+            % (100 * (1 - split), 100 * split, 100 * fm)
+            if split < 0.2 else
+            'Splitting that gain: the bare flag "no root production survives every\n'
+            'block at once" carries a median %.0f%% of it, and grading the surviving\n'
+            'count adds the other %.0f%% -- so the straddling window reads more than\n'
+            'a yes/no consistency bit.\n\n' % (100 * (1 - split), 100 * split))
+    else:
+        for v, c in ((2, '#3b4cc0'), (3, '#7b9ff9'), (4, '#b40426')):
+            rs = [r for r in xb if r['v'] == v]
+            ax2.scatter([r['frac_dead'] for r in rs],
+                        [r['frac_tighter'] for r in rs], s=45, color=c,
+                        label='v = %d' % v)
+        ax2.set_xlabel('fraction with no surviving root production')
+        ax2.set_ylabel('fraction the root tightens')
+        ax2.legend(frameon=False, fontsize=9)
+        dead_line = ''
+
+    tg = [100 * r['frac_tighter'] for r in xb]
+    sgn = {}
+    for v in sorted({r['v'] for r in xb}):
+        rs = [r['k_by_tighter'] for r in xb if r['v'] == v]
+        sgn[v] = (sum(1 for a, b in rs if a < b), sum(1 for a, b in rs if a > b),
+                  len(rs))
+    lo, hi = min(sgn), max(sgn)
+    txt = ('A site\'s own level-1 block cannot tell whether it is consistent with the OTHER\n'
+           'blocks. Only a window straddling a boundary can. n_sym_root is that test made\n'
+           'countable: how many symbols the block still admits AFTER every other block has\n'
+           'constrained it through the root production.\n\n'
+           'The substrate is there: the root tightens the block at %.0f-%.0f%% of observations,\n'
+           'rising with v. And the criterion uses it. Added to (reveal count, n_words) it\n'
+           'gains a median %+.3f R^2, in %d/%d cells, against a permutation null of %+.3f --\n'
+           'the count shuffled within each step, which measures how much any fourth column\n'
+           'buys by splitting the data finer. The within-block control adds %+.3f.\n\n'
+           '%s'
+           'Unregistered and worth flagging: the SIGN of the effect on k flips with v. At\n'
+           'v=%d a root-tightened site gets a SHORTER window (%d/%d cells); at v=%d a LONGER\n'
+           'one (%d/%d). I registered no direction here and am not claiming a mechanism --\n'
+           'the last two mechanisms I stated were both refuted while the predictions held.'
+           % (min(tg), max(tg), med(net), sum(1 for n in net if n >= 0.02), len(net),
+              med([r['gain_null'] for r in xb]), med(ctrl), dead_line,
+              lo, sgn[lo][0], sgn[lo][2], hi, sgn[hi][1], sgn[hi][2]))
+    fig.text(0.065, 0.48, txt, fontsize=11, va='top', family='monospace',
+             linespacing=1.4)
+    pdf.savefig(fig); plt.close(fig)
+
+
 def page_traces(pdf, tr, n_show=5):
     fig = plt.figure(figsize=PAGE)
     cfg = tr['config']
-    fig.suptitle('5. Example traces: the window size moving along one generation',
+    fig.suptitle('6. Example traces: the window size moving along one generation',
                  fontsize=20, weight='bold')
     side = int(round(cfg['n_sites'] ** 0.5))
 
@@ -437,7 +526,7 @@ def page_traces(pdf, tr, n_show=5):
     pdf.savefig(fig); plt.close(fig)
 
 
-def page_conclusion(pdf, cells, ks_rows, kl_rows, rows):
+def page_conclusion(pdf, cells, ks_rows, kl_rows, rows, xb=()):
     keys = sorted(cells)
     fz, fn = floor_cells(rows)
     ratio = med([cells[k]['adapt']['success'] / cells[k]['fixed']['success']
@@ -466,13 +555,24 @@ def page_conclusion(pdf, cells, ks_rows, kl_rows, rows):
         ('predict k from local reveal count', 'R^2<=%.2f' % mx, '18/18 runs',
          'subsumes time; rest is content-dependent'),
     ]
-    y = 0.80
+    if xb:
+        net = [r['r2_full'] - r['r2_null'] for r in xb]
+        rows_xb = [
+            ('name that residual: within-block grammar', '+%.3f R^2' % med(
+                [r['r2_base'] - r['r2_nrev'] for r in xb]),
+             '%d/%d cells' % (len(xb), len(xb)), 'n_words, over the reveal count'),
+            ('    and grammar ACROSS block boundaries', '+%.3f R^2' % med(net),
+             '%d/%d cells' % (sum(1 for n in net if n >= 0.02), len(net)),
+             'net of a permutation null; hshunt\'s straddle'),
+        ]
+        rows += rows_xb
+    y, step = 0.80, 0.046 if len(rows) <= 6 else 0.040
     fig.text(0.05, 0.855, '%-44s %-11s %-13s %s' % ('what was tried', 'effect', 'support', 'reading'),
              fontsize=12, family='monospace', weight='bold')
     for a, b, c, d in rows:
         fig.text(0.05, y, '%-44s %-11s %-13s %s' % (a, b, c, d),
                  fontsize=11, family='monospace')
-        y -= 0.046
+        y -= step
     concl = (
         'Answer to "how are you setting the patch size over time?"\n\n'
         '  Not over time. The rule that works is "the largest window that matches any\n'
@@ -482,10 +582,14 @@ def page_conclusion(pdf, cells, ks_rows, kl_rows, rows):
         '  The entropy criterion in particular does not bind -- every floor above zero\n'
         '  costs success in every cell measured, because a rejected window falls back on\n'
         '  a shorter one rather than on a better one.\n\n'
+        '  What the site-dependence IS, is grammar: the block\'s own ambiguity, and then\n'
+        '  its consistency with the other blocks through the root -- which only a window\n'
+        '  straddling a boundary can see. That is page 5.\n\n'
         'Caveat: all of this is s=3, L=2 (9x9, rungs 5/7/9), v in {2,3,4}, m=2 mostly,\n'
         'n_gen=4096. Deeper boards need k >= U1 = 2s^(L-1)-1, which is out of reach at L=4.'
         % (100 * sa))
-    fig.text(0.05, 0.47, concl, fontsize=11.5, va='top', family='monospace', linespacing=1.42)
+    fig.text(0.05, y - 0.01, concl, fontsize=11.5, va='top', family='monospace',
+             linespacing=1.42)
     pdf.savefig(fig); plt.close(fig)
 
 
@@ -493,6 +597,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--results', default='results/rhm_sampling/2026-11-04')
+    ap.add_argument('--crossblock', default='results/rhm_sampling/2026-11-05',
+                    help='kxblock_*.json; the page is skipped if none are there')
     ap.add_argument('--trace', default='results/rhm_sampling/2026-11-04/trace_s3_v2m2.json')
     ap.add_argument('--out', required=True)
     ap.add_argument('--png_dir', default=None, help='also write one PNG per page')
@@ -502,6 +608,7 @@ def main():
     cells = group_cells(s3)
     ks_rows = load_glob(args.results, 'ksched_*.json')
     kl_rows = load_glob(args.results, 'klocal_*.json')
+    xb_rows = load_glob(args.crossblock, 'kxblock_*.json')
     nmin_rows = json.load(open(ROOT / args.results / 'nmin_smoke.json'))
     tr = json.load(open(ROOT / args.trace))
     print('%d s3 rows -> %d cells | %d ksched | %d klocal | %d nmin'
@@ -541,7 +648,15 @@ def main():
              'SAME mean k, keeps only %.0f%% of the success (%d/%d cells).'
              % (100 * sa, len(by), len(by)),
              'Position explains none of the choice (R^2 < 0.001); local reveal count\n'
-             'explains at most %.2f. The rest is irreducibly content-dependent.' % mx,
+             'explains at most %.2f. The rest is irreducibly content-dependent.' % mx]
+            + ([
+             'That residual is grammar. The block\'s own ambiguity adds %+.3f R^2, and\n'
+             'its consistency with the OTHER blocks through the root -- visible only to\n'
+             'a straddling window -- adds a further %+.3f, net of a permutation null.'
+             % (med([r['r2_base'] - r['r2_nrev'] for r in xb_rows]),
+                med([r['r2_full'] - r['r2_null'] for r in xb_rows]))]
+             if xb_rows else [])
+            + [
              's=3, L=2 is the first board where this question is even askable:\n'
              'at s=2 the only rung between U1 and the grid side is U1 itself.'])
         page_tokenization(pdf, grid0, v=2, s=3, L=2)
@@ -549,8 +664,10 @@ def main():
         page_floors(pdf, s3, nmin_rows)
         page_schedule(pdf, ks_rows)
         page_locality(pdf, kl_rows)
+        if xb_rows:
+            page_crossblock(pdf, xb_rows)
         page_traces(pdf, tr)
-        page_conclusion(pdf, cells, ks_rows, kl_rows, s3)
+        page_conclusion(pdf, cells, ks_rows, kl_rows, s3, xb_rows)
     print('wrote %s (%.2f MB)' % (out, out.stat().st_size / 1e6))
 
 

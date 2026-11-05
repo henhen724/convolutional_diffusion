@@ -261,6 +261,11 @@ def main():
             # nsr's place; full - dead is what grading the count still buys.
             dead = (c['nsr'] == 0).astype(np.int64)
             r2_dead = r2(ks, joint(c['nrev'], c['nw'], c['nsl'], dead))
+            # The dead/graded split only means something if nsr takes values
+            # above 1 often enough to have been gradeable.  frac_multi is that
+            # substrate: without it, "the gain is one bit" is just a statement
+            # that nsr happens to be binary, not that grading buys nothing.
+            frac_multi = float((c['nsr'] >= 2).mean())
             tighter = float((c['nsr'] < c['nsl']).mean())
             row = dict(v=args.v, s=args.s, L=args.L, m=args.m, rule_seed=rs, P=P,
                        n_gen=args.n_gen, n_obs=int(ks.size),
@@ -269,6 +274,8 @@ def main():
                        nsr_mean=float(c['nsr'].mean()),
                        frac_tighter=tighter,
                        frac_dead=float((c['nsr'] == 0).mean()),
+                       frac_multi=frac_multi,
+                       nsr_hist=np.bincount(c['nsr'], minlength=6)[:6].tolist(),
                        r2_nrev=r2(ks, c['nrev']),
                        r2_base=base,                 # nrev + nw, the prior best
                        r2_base_nsl=base_l,           # + within-block control
@@ -288,12 +295,12 @@ def main():
             rows.append(row)
             print('v%d m%d rs%d P=%-5d k %.3f | base %.3f +nsl %.3f (ctrl %+.3f)'
                   ' +nsr %.3f (GAIN %+.3f, null %+.3f, net %+.3f) | dead flag'
-                  ' %+.3f, graded %+.3f | tighter %.1f%% dead %.1f%%'
+                  ' %+.3f, graded %+.3f (nsr>=2 at %.1f%%) | tighter %.1f%% dead %.1f%%'
                   ' | k tight/loose %.2f/%.2f'
                   % (args.v, args.m, rs, P, row['k_mean'], base, base_l,
                      base_l - base, full, full - base_l, null - base_l,
                      full - null, r2_dead - base_l, full - r2_dead,
-                     100 * tighter, 100 * row['frac_dead'],
+                     100 * frac_multi, 100 * tighter, 100 * row['frac_dead'],
                      row['k_by_tighter'][0], row['k_by_tighter'][1]))
             sys.stdout.flush()
 
