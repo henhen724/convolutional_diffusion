@@ -28,9 +28,19 @@ cd "$HOME/convolutional_diffusion"
 V=$1; M=$2; LAD_NAME=$3
 case "$LAD_NAME" in
     small) LAD="10 30 100 300 1000 3000 10000" ;;
+    mid)   LAD="100 300 1000 3000 10000 30000" ;;
     big)   LAD="100 300 1000 3000 10000 30000 100000" ;;
-    *)     echo "ladder must be small or big" >&2; exit 2 ;;
+    *)     echo "ladder must be small, mid or big" >&2; exit 2 ;;
 esac
+MAXP=${MAXP:-400000}
+
+# Cap the ladder, do not lean on --max_patches. run_cell builds the machine and
+# only then compares machine.n_distinct against the cap
+# (rhm_sampling_complexity.py:64), so a rung reported as SKIPPED has already
+# paid for its table in full. 51141861 died exactly there: at v2 m3 the k=9
+# table is 733k patches at P=30000 and the P=100000 rung it was about to skip
+# OOM-killed it at 8G. |R_L| = v*m^10 = 118098 there and P* ~ 0.21 |R_L| ~ 25k,
+# so the mid ladder brackets the peak without ever building the 100000 tables.
 
 ml purge
 ml devel math python/3.12.1 py-pytorch/2.4.1_py312 py-torchvision/0.19.1_py312 py-numpy/1.26.3_py312
@@ -42,13 +52,13 @@ git rev-parse --short HEAD > "$OUT/provenance_adapt_s3.txt"
 
 python scripts/rhm_sampling_complexity.py --v "$V" --m "$M" --s 3 --L 2 \
     --k 5 7 9 --P $LAD --n_gen 4096 --gen_batch 4096 --rule_seeds 3 \
-    --block_align 1 --pad_mode outside \
+    --max_patches "$MAXP" --block_align 1 --pad_mode outside \
     --out "$OUT/s3_fixed_L2_v${V}_m${M}.json"
 
 python scripts/rhm_sampling_complexity.py --v "$V" --m "$M" --s 3 --L 2 \
     --k_adapt 5 7 9 --h_mode match --h_min 0 0.1 0.5 1.0 \
     --P $LAD --n_gen 4096 --gen_batch 4096 --rule_seeds 3 \
-    --block_align 1 --pad_mode outside \
+    --max_patches "$MAXP" --block_align 1 --pad_mode outside \
     --out "$OUT/s3_adapt_L2_v${V}_m${M}.json"
 
 echo "done v${V} m${M} $(date)"
