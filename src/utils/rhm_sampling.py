@@ -561,6 +561,9 @@ class AdaptiveWindowDiscreteScoreMachine(nn.Module):
                   else masked)
             chosen = torch.where(ok[:, None], post, chosen)
             kmap = torch.where(ok, torch.full_like(kmap, float(k)), kmap)
+        # the per-site choice, kept so a caller can read it without repeating
+        # the accept test and risking drift from it
+        self._last_kmap = kmap
         if masked.any():
             self.trace.append((float(masked.float().mean()),
                                float(kmap[masked].mean())))

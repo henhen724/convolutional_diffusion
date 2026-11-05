@@ -1846,5 +1846,509 @@
   "n_gen": 4096,
   "block_align": 1,
   "pad_mode": "outside"
+ },
+ {
+  "n_samples": 4096,
+  "grammatical": 0.134521484375,
+  "novel": 0.982666015625,
+  "success": 0.1171875,
+  "parse_height_mean": 0.416015625,
+  "level_parse_fraction": [
+   0.134521484375,
+   0.6518825954861112,
+   1.0
+  ],
+  "n_distinct": 4092,
+  "P": 10000,
+  "k": "adapt",
+  "n_distinct_patches": 556424,
+  "n_patches_total": 2430000.0,
+  "seconds": 463.5,
+  "train_distinct": 9565,
+  "k_set": [
+   5,
+   7,
+   9
+  ],
+  "h_min": 1.0,
+  "h_mode": "match",
+  "k_mean": 6.832240463774881,
+  "k_schedule": [
+   [
+    0.0,
+    5.001
+   ],
+   [
+    0.1,
+    5.023
+   ],
+   [
+    0.2,
+    5.125
+   ],
+   [
+    0.3,
+    5.351
+   ],
+   [
+    0.4,
+    5.767
+   ],
+   [
+    0.5,
+    6.444
+   ],
+   [
+    0.6,
+    7.325
+   ],
+   [
+    0.7,
+    8.227
+   ],
+   [
+    0.8,
+    8.807
+   ],
+   [
+    0.9,
+    8.982
+   ],
+   [
+    1.0,
+    9.0
+   ]
+  ],
+  "v": 2,
+  "s": 3,
+  "L": 2,
+  "m": 3,
+  "rule_seed": 0,
+  "nsteps": 162,
+  "alpha_smooth": 0.001,
+  "schedule": "linear",
+  "n_gen": 4096,
+  "block_align": 1,
+  "pad_mode": "outside"
+ },
+ {
+  "n_samples": 4096,
+  "grammatical": 0.174560546875,
+  "novel": 0.95556640625,
+  "success": 0.130126953125,
+  "parse_height_mean": 0.5283203125,
+  "level_parse_fraction": [
+   0.174560546875,
+   0.7001681857638888,
+   1.0
+  ],
+  "n_distinct": 4094,
+  "P": 30000,
+  "k": "adapt",
+  "n_distinct_patches": 1053658,
+  "n_patches_total": 7290000.0,
+  "seconds": 879.7,
+  "train_distinct": 26522,
+  "k_set": [
+   5,
+   7,
+   9
+  ],
+  "h_min": 1.0,
+  "h_mode": "match",
+  "k_mean": 6.945298465681665,
+  "k_schedule": [
+   [
+    0.0,
+    5.001
+   ],
+   [
+    0.1,
+    5.033
+   ],
+   [
+    0.2,
+    5.162
+   ],
+   [
+    0.3,
+    5.449
+   ],
+   [
+    0.4,
+    5.957
+   ],
+   [
+    0.5,
+    6.716
+   ],
+   [
+    0.6,
+    7.62
+   ],
+   [
+    0.7,
+    8.415
+   ],
+   [
+    0.8,
+    8.859
+   ],
+   [
+    0.9,
+    8.984
+   ],
+   [
+    1.0,
+    9.0
+   ]
+  ],
+  "v": 2,
+  "s": 3,
+  "L": 2,
+  "m": 3,
+  "rule_seed": 0,
+  "nsteps": 162,
+  "alpha_smooth": 0.001,
+  "schedule": "linear",
+  "n_gen": 4096,
+  "block_align": 1,
+  "pad_mode": "outside"
+ },
+ {
+  "n_samples": 4096,
+  "grammatical": 0.1220703125,
+  "novel": 0.9482421875,
+  "success": 0.0703125,
+  "parse_height_mean": 0.27783203125,
+  "level_parse_fraction": [
+   0.1220703125,
+   0.5235460069444444,
+   1.0
+  ],
+  "n_distinct": 3892,
+  "P": 100,
+  "k": "adapt",
+  "n_distinct_patches": 18893,
+  "n_patches_total": 24300.0,
+  "seconds": 23.1,
+  "train_distinct": 100,
+  "k_set": [
+   5,
+   7,
+   9
+  ],
+  "h_min": 0.0,
+  "h_mode": "match",
+  "k_mean": 7.104601989557714,
+  "k_schedule": [
+   [
+    0.0,
+    5.676
+   ],
+   [
+    0.1,
+    5.769
+   ],
+   [
+    0.2,
+    5.936
+   ],
+   [
+    0.3,
+    6.135
+   ],
+   [
+    0.4,
+    6.393
+   ],
+   [
+    0.5,
+    6.744
+   ],
+   [
+    0.6,
+    7.224
+   ],
+   [
+    0.7,
+    7.845
+   ],
+   [
+    0.8,
+    8.508
+   ],
+   [
+    0.9,
+    8.918
+   ],
+   [
+    1.0,
+    8.998
+   ]
+  ],
+  "v": 2,
+  "s": 3,
+  "L": 2,
+  "m": 3,
+  "rule_seed": 1,
+  "nsteps": 162,
+  "alpha_smooth": 0.001,
+  "schedule": "linear",
+  "n_gen": 4096,
+  "block_align": 1,
+  "pad_mode": "outside"
+ },
+ {
+  "n_samples": 4096,
+  "grammatical": 0.1572265625,
+  "novel": 0.96875,
+  "success": 0.1259765625,
+  "parse_height_mean": 0.4189453125,
+  "level_parse_fraction": [
+   0.1572265625,
+   0.6376410590277778,
+   1.0
+  ],
+  "n_distinct": 4054,
+  "P": 300,
+  "k": "adapt",
+  "n_distinct_patches": 47832,
+  "n_patches_total": 72900.0,
+  "seconds": 46.3,
+  "train_distinct": 300,
+  "k_set": [
+   5,
+   7,
+   9
+  ],
+  "h_min": 0.0,
+  "h_mode": "match",
+  "k_mean": 7.358261285004793,
+  "k_schedule": [
+   [
+    0.0,
+    5.875
+   ],
+   [
+    0.1,
+    6.009
+   ],
+   [
+    0.2,
+    6.197
+   ],
+   [
+    0.3,
+    6.435
+   ],
+   [
+    0.4,
+    6.731
+   ],
+   [
+    0.5,
+    7.118
+   ],
+   [
+    0.6,
+    7.612
+   ],
+   [
+    0.7,
+    8.184
+   ],
+   [
+    0.8,
+    8.699
+   ],
+   [
+    0.9,
+    8.955
+   ],
+   [
+    1.0,
+    8.999
+   ]
+  ],
+  "v": 2,
+  "s": 3,
+  "L": 2,
+  "m": 3,
+  "rule_seed": 1,
+  "nsteps": 162,
+  "alpha_smooth": 0.001,
+  "schedule": "linear",
+  "n_gen": 4096,
+  "block_align": 1,
+  "pad_mode": "outside"
+ },
+ {
+  "n_samples": 4096,
+  "grammatical": 0.2490234375,
+  "novel": 0.9697265625,
+  "success": 0.21875,
+  "parse_height_mean": 0.70654296875,
+  "level_parse_fraction": [
+   0.2490234375,
+   0.7529296875,
+   1.0
+  ],
+  "n_distinct": 4060,
+  "P": 1000,
+  "k": "adapt",
+  "n_distinct_patches": 117028,
+  "n_patches_total": 243000.0,
+  "seconds": 102.4,
+  "train_distinct": 994,
+  "k_set": [
+   5,
+   7,
+   9
+  ],
+  "h_min": 0.0,
+  "h_mode": "match",
+  "k_mean": 7.709009476649908,
+  "k_schedule": [
+   [
+    0.0,
+    6.363
+   ],
+   [
+    0.1,
+    6.495
+   ],
+   [
+    0.2,
+    6.693
+   ],
+   [
+    0.3,
+    6.931
+   ],
+   [
+    0.4,
+    7.242
+   ],
+   [
+    0.5,
+    7.604
+   ],
+   [
+    0.6,
+    8.031
+   ],
+   [
+    0.7,
+    8.471
+   ],
+   [
+    0.8,
+    8.813
+   ],
+   [
+    0.9,
+    8.967
+   ],
+   [
+    1.0,
+    8.999
+   ]
+  ],
+  "v": 2,
+  "s": 3,
+  "L": 2,
+  "m": 3,
+  "rule_seed": 1,
+  "nsteps": 162,
+  "alpha_smooth": 0.001,
+  "schedule": "linear",
+  "n_gen": 4096,
+  "block_align": 1,
+  "pad_mode": "outside"
+ },
+ {
+  "n_samples": 4096,
+  "grammatical": 0.3212890625,
+  "novel": 0.962646484375,
+  "success": 0.283935546875,
+  "parse_height_mean": 0.904541015625,
+  "level_parse_fraction": [
+   0.3212890625,
+   0.8196885850694444,
+   1.0
+  ],
+  "n_distinct": 4076,
+  "P": 3000,
+  "k": "adapt",
+  "n_distinct_patches": 246889,
+  "n_patches_total": 729000.0,
+  "seconds": 208.9,
+  "train_distinct": 2956,
+  "k_set": [
+   5,
+   7,
+   9
+  ],
+  "h_min": 0.0,
+  "h_mode": "match",
+  "k_mean": 7.993007954256035,
+  "k_schedule": [
+   [
+    0.0,
+    6.837
+   ],
+   [
+    0.1,
+    6.97
+   ],
+   [
+    0.2,
+    7.163
+   ],
+   [
+    0.3,
+    7.385
+   ],
+   [
+    0.4,
+    7.645
+   ],
+   [
+    0.5,
+    7.957
+   ],
+   [
+    0.6,
+    8.303
+   ],
+   [
+    0.7,
+    8.627
+   ],
+   [
+    0.8,
+    8.863
+   ],
+   [
+    0.9,
+    8.973
+   ],
+   [
+    1.0,
+    8.999
+   ]
+  ],
+  "v": 2,
+  "s": 3,
+  "L": 2,
+  "m": 3,
+  "rule_seed": 1,
+  "nsteps": 162,
+  "alpha_smooth": 0.001,
+  "schedule": "linear",
+  "n_gen": 4096,
+  "block_align": 1,
+  "pad_mode": "outside"
  }
 ]

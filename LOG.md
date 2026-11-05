@@ -90,3 +90,12 @@ holds the live state.
   pooled ratio grows from s=2 (4 phases) to s=3 (9), and it fell: 4.04x over 86 cells vs 3.20x over
   14. With 50 exact-support cells the decomposition is 3.51x = 1.06x support x 3.21x sampler, close
   to the 3.46 = 1.05 x 3.18 it showed at 10 cells. So the cost is per-site weight error.
+- What the per-site window choice actually depends on (`rhm_k_locality.py`, 18 runs over v=2,3,4 x
+  3 seeds x P=300,1000, R^2 by group means over masked sites). Position explains nothing: the site's
+  offset within its level-1 block gives R^2 = 0.000 in 18/18 and adds nothing jointly with step, so
+  the choice carries no positional signature and a phase-aware lookup table would not help. Step
+  alone gives .09-.21 (v2), .22-.36 (v3), .30-.41 (v4), rising with v and falling with P. The local
+  revealed-neighbour count beats step in 18/18 and subsumes it (step adds only .005-.013 on top),
+  so the k(t) schedule is a consequence of that count rather than an independent factor -- but it
+  caps at .47, leaving >=53% turning on *which* tokens were revealed. The criterion is irreducibly
+  content-dependent, which is why section D's bare schedule loses at matched mean k.
