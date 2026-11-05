@@ -1,0 +1,35 @@
+srun: job 51246420 queued and waiting for resources
+srun: job 51246420 has been allocated resources
+The following modules were not unloaded:
+  (Use "module --force purge" to unload all):
+
+  1) math   2) devel
+1D cells:  60   |R_L| 12 .. 9.04e+04   depths [2, 3, 4]
+2D cells:  50   |R_L| 38 .. 6.29e+06   depths [2, 3]
+
+===== estimator A   (110 cells) =====
+  1D only   b = 0.510    (x* = |R_L|^-0.490, so x* falls with |R_L|)
+  2D only   b = 0.945    (x* = |R_L|^-0.055, so x* falls with |R_L|)
+  pooled, common b:  b = 0.785  [0.665, 0.849]
+                     2D offset d = 1.113  [0.757, 1.490]  -> 3.04x in x*
+                     raw 1D/2D gap in median x* is 3.87x (= d of 1.353)
+  separate b:        b_1D = 0.510   b_2D = 0.945   difference 0.435  [0.302, 0.522]
+
+===== estimator B   (110 cells) =====
+  1D only   b = 0.473    (x* = |R_L|^-0.527, so x* falls with |R_L|)
+  2D only   b = 0.933    (x* = |R_L|^-0.067, so x* falls with |R_L|)
+  pooled, common b:  b = 0.764  [0.631, 0.828]
+                     2D offset d = 1.185  [0.753, 1.506]  -> 3.27x in x*
+                     raw 1D/2D gap in median x* is 3.87x (= d of 1.353)
+  separate b:        b_1D = 0.473   b_2D = 0.933   difference 0.461  [0.340, 0.560]
+
+--- reading ---
+  Raw 1D/2D gap 3.87x. After allowing x* to depend on |R_L| with a
+  single exponent, the residual dimension offset is 3.04x (A) and
+  3.27x (B) -- 79% and 85% of the raw gap.
+  The offset survives, so dimension is a real effect on top of the
+  scale dependence and section B's open question stands.
+  Separate exponents still differ (b_1D 0.510 vs b_2D 0.945 under A),
+  which is the part a single pooled b cannot absorb.
+
+wrote /scratch/users/hshunt/convolutional_diffusion/results/rhm_sampling/2026-11-05/xstar_scaling.json

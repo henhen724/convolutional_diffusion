@@ -109,15 +109,23 @@ def est_A(P, S, _n):
     return float(P[i])
 
 
-def est_B(P, S, n_gen, frac=0.5):
+def est_B(P, S, n_gen, frac=0.5, fallback=False):
     """Inverse-variance weighted parabola over every point near the top.
 
     The window is defined by the DATA's own maximum, so on a flat top it spans
     many points instead of three, and no single tied point can carry the fit.
+
+    ``fallback`` makes a rejected fit return the argmax, which is what A does.
+    Without it B returns nan, and because the rejections track curve shape
+    rather than noise, a median over the surviving cells is taken on a biased
+    subsample -- on the 2026-11-05 L=2 sweep B kept only 2 of 8 cells at v=3.
+    It is off by default so the bootstrap in this script keeps measuring B
+    where B is actually defined.
     """
     i = int(np.argmax(S))
     if not (0 < i < len(S) - 1 and S[i] > 0):
         return np.nan
+    miss = float(P[i]) if fallback else np.nan
     sel = S >= frac * S[i]
     if sel.sum() < 4:
         lo, hi = max(0, i - 2), min(len(S), i + 3)
@@ -128,12 +136,12 @@ def est_B(P, S, n_gen, frac=0.5):
     try:
         a, b, _ = np.polyfit(x, y, 2, w=1.0 / np.sqrt(var))
     except Exception:
-        return np.nan
+        return miss
     if a >= 0:
-        return np.nan
+        return miss
     xv = -b / (2 * a)
     if not (x.min() <= xv <= x.max()):
-        return np.nan
+        return miss
     return float(np.exp(xv))
 
 

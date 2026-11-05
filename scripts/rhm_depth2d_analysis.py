@@ -62,7 +62,7 @@ def load_RL(paths):
     return out
 
 
-def load_curves(specs, RL):
+def load_curves(specs, RL, P_min=0.0):
     """[(tag, glob)] -> {(tag, v, m, s, L, rs, k): (P, succ, n)} at k = U1."""
     grouped = defaultdict(list)
     for tag, pat in specs:
@@ -91,14 +91,21 @@ def load_curves(specs, RL):
         Ps = np.array(sorted(by_P), float)
         hits = np.array([by_P[p][0] for p in sorted(by_P)], float)
         ns = np.array([by_P[p][1] for p in sorted(by_P)], float)
-        out[key] = (Ps, hits / ns, ns)
+        keep = Ps >= P_min
+        if keep.sum() < 3:
+            continue
+        out[key] = (Ps[keep], (hits / ns)[keep], ns[keep])
     return out
 
 
 def cell_estimates(P, S, N, n_boot, frac, rng):
-    """Point estimates plus bootstrap replicates of P*, for A and B."""
+    """Point estimates plus bootstrap replicates of P*, for A and B.
+
+    B runs with fallback=True here: its rejections track curve shape, so
+    dropping those cells would take the median over a biased subsample.
+    """
     ng = float(np.median(N))
-    pa, pb = est_A(P, S, ng), est_B(P, S, ng, frac)
+    pa, pb = est_A(P, S, ng), est_B(P, S, ng, frac, fallback=True)
     ba = np.empty(n_boot)
     bb = np.empty(n_boot)
     for j in range(n_boot):
@@ -106,7 +113,7 @@ def cell_estimates(P, S, N, n_boot, frac, rng):
         # precision it was actually measured with.
         Sb = rng.binomial(N.astype(int), np.clip(S, 0, 1)) / N
         ba[j] = est_A(P, Sb, ng)
-        bb[j] = est_B(P, Sb, ng, frac)
+        bb[j] = est_B(P, Sb, ng, frac, fallback=True)
     return pa, pb, ba, bb
 
 
@@ -145,6 +152,22 @@ def main():
     ap.add_argument('--old', default='results/rhm_sampling/2026-11-03')
     ap.add_argument('--new', default='results/rhm_sampling/2026-11-05')
     ap.add_argument('--boot', type=int, default=400)
+    ap.add_argument('--P_min', type=float, default=10,
+                    help='drop ladder points below this before locating the '
+                         'peak. 51244089 ran down to P=2 and found a spike '
+                         'there that is the copying regime, not the peak the '
+                         'scaling law is about: v4m2 rs3 has success 0.0070 at '
+                         'P=3 against 0.0032 on the broad hump at P=100, with '
+                         'grammaticality 0.238 at P=3 falling to 0.020 by P=8. '
+                         'With two or three training grids the machine has '
+                         'almost no window dictionary to recombine, so it '
+                         'near-copies -- grammatical, and novel only because '
+                         'the training set is too small to match against. The '
+                         'spike is sharp (one ladder point) and seed-specific, '
+                         'so it is a lottery over which few grids were drawn, '
+                         'not a scale. Every published 2D L=2 ladder starts at '
+                         'P=10, so this floor also makes the v=4 control a '
+                         'like-for-like comparison. Set 0 to see it.')
     ap.add_argument('--frac', type=float, default=0.5)
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--out', default=None)
@@ -162,7 +185,7 @@ def main():
         # pad_mode outside), so they are more of that population, not a new
         # one. Only the seeds and two ladder points differ.
         ('L3pub', a.new + '/L3seed_v*_m2_k7.json'),
-    ], RL)
+    ], RL, a.P_min)
     if not curves:
         raise SystemExit('no curves; has 51244089 finished?')
 
