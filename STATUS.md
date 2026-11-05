@@ -279,6 +279,24 @@ excuse for the null.
    it when 51244750 lands** -- it already globs `L3seed_v*_m2_k7.json`, and the new L=3 cells are
    exactly the high-`|R_L|` end where `b_2D` is least constrained. Use `--min_RL 200` (and check
    1000): without it the P>=10 floor censors small-`|R_L|` 1D cells and `b_1D` reads 0.510.
+9. **Deck built and committed (`0861ef5`), upload held for 51244750.**
+   `scripts/build_audit_slides.py` -> `notebooks/2026-11-05_rhm_audit_slides.pdf`, 8 landscape
+   pages, 0.10 MB: title, tokenization, traces, then one page per attack (estimator / scale /
+   depth) and what each changed. All eight verified by rendering `--png_dir` under a
+   `/scratch` path and reading the PNGs -- `--png_dir /tmp/...` inside `srun` writes to the
+   *compute node's* /tmp and is invisible afterwards.
+   The trace page re-runs `run_cell`'s exact three seeds (grammar `1000+rs`, data/sampler
+   `7e6+1000*rs+P`, torch `seed+9973`) at `n_gen=16384` and reproduces 51244089's v=4 m=2 L=2
+   rs=3 row to 4 decimals; anything less exact silently prints different numbers from the JSON.
+   **Reading `peak_noise.txt` correctly matters here:** section 2/3's "observed 1.47x" is the
+   *within-(v,m,L)* spread across rule seeds, median over the 11 groups, which is what pairs
+   with the estimator term in the log-variance split; section 4's 1.97x is the spread across
+   all 30 cells and also contains the real movement of x* with `(v,m)`. The deck's bar chart
+   plots the first and quotes the second as a separate line.
+   **Remaining before the deadline:** when 51244750 lands, re-run `rhm_depth2d_analysis.py`
+   (both `--P_min 10 --copy_rel 0` and `--P_min 0 --copy_rel 0.5`) and
+   `rhm_xstar_scaling.py --min_RL 200` (and 1000), update section A, re-render, then
+   `claude-results-upload.sh`.
 
 ## Discipline notes
 - Analysis runs in `srun -p sganguli -t 10 -c 2 --mem=4G`, never a login node; there `ml devel math
