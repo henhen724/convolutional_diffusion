@@ -9,6 +9,7 @@ layer-2 posterior (LOG.md, `mls_entropy_barrier_results.ipynb`).
 `P` = training samples before the LS machine emits output **both novel and fully grammatical**.
 > **`P* = exp(Theta(n))`, `n` = sites. At the U=1 window in 2D, `P* = 0.21 |R_L|`.**
 Measured, not derived; the `C(k) = f0^U` ceiling stays retracted. 30 bracketed 2D peaks collapse to median 0.197 while `|R_L|` spans 49 152x; in 1D `ln P*` grows 0.374/site over n=4..16 but `P* = Theta(|R_L|)` fails (`b=0.689+-0.045`). Root needs `k >= U1 = 2s^(L-1)-1`.
+**Estimator-robust (2026-11-05):** swapping the 3-point peak fit for an inverse-variance fit over the whole top of each curve moves the 2D exponent to `b=0.927+-0.033` and the median to 0.177, overlapping CIs -- the scatter it removes was all estimator noise (Open problems). **Not yet depth-robust at fixed `(v,m)`:** next step 6.
 
 ## B. Open question: why x* = P*/|R_L| differs by dimension
 **Scope label added 2026-11-05.** This section used to read "n=16: 1D 0.083, 2D 0.159, 1.92x apart" with no statement of *which* peak population those came from, and there are three in the repo. All agree on the direction; the gap's size depends on the population, so the label matters:
@@ -92,8 +93,25 @@ excuse for the null.
 
 ## Open problems
 - The 1D/2D offset has no mechanism after three refutations. No fourth without a measurement.
-- 2D peaks scatter 4.8x per cell though medians reproduce to 1.2x (raise n_gen first); 2D L=4 needs
-  k=15, out of reach; one L=3 curve unbracketed (v3m2 rs0, `x* >= 0.477`).
+- ~~2D peaks scatter 4.8x per cell though medians reproduce to 1.2x (raise n_gen first)~~
+  **Answered 2026-11-05 (`scripts/rhm_peak_noise.py`, commit `76b6001`): the scatter is the peak
+  estimator, not the grammar.** Resampling each measured curve from `Binomial(n_gen, p_hat)` gives
+  the estimator's spread on a *fixed* grammar; log-variances subtract, and over 30 U=1 2D curves
+  nothing is left -- observed 1.47x = estimator 1.59x, grammar **1.00x** (floored; the subtraction
+  went negative, which is sampling noise in the comparison, and with 2-3 seeds per cell the
+  observed spread is itself poorly determined, so this is "undetectable at this power", not zero).
+  Cause: `peak_of` fits a parabola through the top **three** points, so at n_gen=4096, where
+  success~0.03 has SE ~0.003 and the top is a statistical tie, one tied point drags the window.
+  An inverse-variance fit over every point within 2x of the max is quieter (1.26x vs 1.50x), tracks
+  the same peak (displacement 1.22x) and removes A's per-cell biases (v3m2 rs1 **0.130**, v3m3 rs1
+  **2.294**). The headline does not depend on the choice: `b = 0.965+-0.041` (A, med x* 0.197) vs
+  `0.927+-0.033` (B, 0.177), overlapping CIs. Still open from this bullet: 2D L=4 needs k=15, out of
+  reach; one L=3 curve unbracketed (v3m2 rs0, `x* >= 0.477`).
+- **2D depth-stability at fixed `(v,m)` is untested** -- see next step 6. The 0.21 headline leans on
+  L=2 pooled 0.1925 (nine combos) against L=3 pooled 0.2075 (two), and those combos are
+  **disjoint** while x* varies 7.6x across (v,m) medians. 1D, paired within (v,m), has x* *falling*
+  with depth in **15/15** combos (median ~2.8x, up to 51x), which is exactly why `P* = Theta(|R_L|)`
+  fails there. If 2D does the same, section A needs a depth-dependent statement.
 - **Blocked on hshunt (MLS):** the corrected layer-2 posterior. Nothing MLS runs until it lands.
 
 ## Next steps
@@ -149,6 +167,20 @@ excuse for the null.
    +0.017, far +0.002, item 6 +0.0083, item 7 +0.0047, same ordering -- so the 18 cells tightened
    the estimate rather than changing the verdict. Rows written incrementally; results in
    `results/rhm_sampling/2026-11-05/kdepth_v{2,3,4}_m2_L3.json` (committed with `git add -f`).
+6. **In flight: 51244089** (`scripts/rhm_depth2d.sbatch`, CPU, 3 h cap). Measures the 2D `L=2 m=2`
+   peaks at **v=2 and v=3**, which have never been run -- m=2 at L=2 exists only for v=4 -- so that
+   L=2 can be paired against the existing `L3peak_v{2,3}_m2_k7.json` **at fixed `(v,m)`** instead of
+   by pooling over disjoint combos. 25-point ladder at ~1.26x spacing over `P=2..1000` (`|R_L|` is
+   64/96/128, so the whole peak is below 1000), `rule_seeds 8`, `n_gen 16384` -- which is also the
+   "raise n_gen first" step, and 4x the published L=2 setting. **v=4 is the control:** it is the one
+   m=2 L=2 cell that already exists (n_gen 8192, 2 seeds), so agreement there shows the denser
+   ladder and extra seeds do not move the answer by themselves. Exact `|R_L|` is recomputed for
+   seeds 3-7 rather than assumed flat, since x* is a ratio to it.
+   **Registered before the run:** (1) v=4 reproduces the published x* within the bootstrap band;
+   (2) if 2D behaves like 1D, x*(L=3) < x*(L=2) at both v=2 and v=3. **Standing caveat:** the L=3
+   side stays at its published `n_gen=1024` on a 3.16x-spaced ladder, with per-cell bootstrap
+   spread 1.2-3.5x over 3 seeds, so only an effect of roughly the 1D size (~2.8x) is resolvable
+   here; a null will be reported as "no effect resolvable at this power", not as depth-stability.
 
 ## Discipline notes
 - Analysis runs in `srun -p sganguli -t 10 -c 2 --mem=4G`, never a login node; there `ml devel math
