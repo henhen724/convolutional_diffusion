@@ -1,9 +1,9 @@
 # STATUS
 
 **RHM sampling complexity** is answered and delivered (was due 12:00 PT Fri 11/6). Running:
-**51143385** (s3 v2m3; all 12 fair-test cells have landed, it is still extending their P ladder --
-peaks can only rise). **MLS** is parked on hshunt's corrected
-layer-2 posterior (LOG.md, `mls_entropy_barrier_results.ipynb`).
+**51143385** (s3 v2m3; all 12 fair-test cells landed, still extending their P ladder -- peaks can
+only rise) and **51175489** (`rhm_k_content.py`, next step 2). **MLS** is parked on hshunt's
+corrected layer-2 posterior (LOG.md, `mls_entropy_barrier_results.ipynb`).
 
 ## A. The answer
 `P` = training samples before the LS machine emits output **both novel and fully grammatical**.
@@ -49,9 +49,10 @@ schedule can explain more of k at high `v` and still pick wrong at the sites tha
 ## Next steps
 1. C+D deck + notebook **delivered** 2026-11-04 (`build_s3_slides.py`,
    `rhm_patch_size_2026-11-04.ipynb`, uploaded). Re-render both once 51143385 finishes its ladder.
-2. Name the >=53% residual in D. Reveal *count* caps at .47, so the rest is *which* tokens: next
-   regressor is the number of level-1 words still compatible with the window's revealed sites
-   (grammar-side, computable from the partial grid, varies at fixed count). Extend `KRecorder`.
+2. **Running (51175489)**: name the >=53% residual. `rhm_k_content.py` adds `n_words` = level-1
+   words still compatible with the site's own block. Smoke cell v2m2 P300: **+0.109 R^2 over nrev**
+   (registered threshold .05), block-fill control +0.017. Predicted: gain grows with `v`. My stated
+   *mechanism* is already refuted -- mean k rises with `n_words`, not falls (confounded with fill).
 
 ## Discipline notes
 - Analysis runs in `srun -p sganguli -t 10 -c 2 --mem=4G`, never a login node; there `ml devel math
