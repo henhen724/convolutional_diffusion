@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from collections import defaultdict
@@ -353,6 +354,29 @@ def page_copy(pdf, D):
 # page 5: the depth test
 # --------------------------------------------------------------------------
 
+def copyrel_sensitivity(D):
+    """The relative cut has one free parameter, so say what moves when it moves.
+
+    Reads the sweep `rhm_audit_refresh.sbatch` writes.  Absent -- as it is
+    until that job runs -- the page simply does not make the claim.
+    """
+    f = D / 'depth2d_copyrel_sens.txt'
+    if not f.exists():
+        return ''
+    pat = re.compile(r'^([AB])\s+(\d)\s+\S+\s+\(\d+\)\s+\S+\s+\(\d+\)\s+([\d.]+)x')
+    by_v = defaultdict(list)
+    for line in f.read_text().splitlines():
+        mt = pat.match(line)
+        if mt:
+            by_v[int(mt.group(2))].append(float(mt.group(3)))
+    if 2 not in by_v or 3 not in by_v:
+        return ''
+    return ('\n\nThe cut has one free\nparameter.  Over copy_rel\n'
+            '0.25 -> 0.8 (both estimators)\nv=2 moves over %.2f-%.2fx and\n'
+            'v=3 over %.2f-%.2fx, every\ninterval still covering 1.'
+            % (min(by_v[2]), max(by_v[2]), min(by_v[3]), max(by_v[3])))
+
+
 def page_depth(pdf, D):
     one = json.load(open(D / 'depth1d_noise_1step.json'))
     cr = json.load(open(D / 'depth2d_copyrel.json'))['verdict']
@@ -442,7 +466,8 @@ def page_depth(pdf, D):
              'the first time (job 51244089,\n'
              '8 rule seeds, n_gen 16384).\n\n'
              'Shaded band: the 1D effect.\n'
-             'Nothing in 2D reaches it.',
+             'Nothing in 2D reaches it.'
+             + copyrel_sensitivity(D),
              fontsize=10.5, va='top', color='#444444', linespacing=1.5)
     pdf.savefig(fig); plt.close(fig)
 
