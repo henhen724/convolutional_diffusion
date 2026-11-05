@@ -65,7 +65,11 @@ schedule can explain more of k at high `v` and still pick wrong at the sites tha
 ## Next steps
 1. **Done.** C+D deck re-rendered on 51143385's completed ladder and re-uploaded 2026-11-05
    (9 pages, cross-block page added). Counts are now derived from the plotted rows, not literals.
-   `rhm_patch_size_2026-11-04.ipynb` still shows the pre-completion numbers -- re-run it.
+   **Correction (2026-11-06):** my note that the notebook "still shows the pre-completion numbers"
+   was wrong, and so was the 12.342 / +0.210 I recorded for the re-score. Recomputed from the 693
+   raw rows: median ratio **11.7509**, median delta gram **+0.2083**, 12 cells. The notebook's
+   `11.8x` (`%.1f`) and the deck's `12x` (`%.0f`) are the same number -- there was never a
+   discrepancy. Notebook re-executed anyway; outputs unchanged. Section C was right all along.
 2. **Done (51175489), 18/18 cells**: `n_words` (level-1 words still compatible with a site's own block) adds **median +0.107 R^2 over `nrev`**, clearing the registered .05 in **18/18**; block-fill control <= .006 everywhere. So the >=53% residual *is* grammatical ambiguity at the block scale, and it is not fill level wearing a grammar label.
    But the registered "gain grows with `v`" is **refuted**: it falls monotonically, .125 / .102 / .096 at v=2/3/4 (6 cells each). The stated mechanism was already refuted by the smoke cell (mean k *rises* with `n_words`, confounded with fill), which is why the gain is scored over `nrev`.
 3. **Done (51197626 / 51198000 / 51198269), 18/18**: cross-block result in D. 51198269 adds only
