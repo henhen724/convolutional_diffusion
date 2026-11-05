@@ -121,6 +121,18 @@ def group_cells(rows):
     return out
 
 
+def floor_cells(rows):
+    """(cells where the best h_min is 0, cells scored at more than one h_min)."""
+    by = defaultdict(lambda: defaultdict(list))
+    for r in rows:
+        if r.get('k') == 'adapt' and float(r.get('n_min', 1.0)) == 1.0:
+            by[tuple(r[c] for c in CELL)][float(r['h_min'])].append(r['success'])
+    scored = {k: d for k, d in by.items() if len(d) > 1}
+    zero = sum(1 for d in scored.values()
+               if max(d, key=lambda h: max(d[h])) == 0.0)
+    return zero, len(scored)
+
+
 def page_tokenization(pdf, grid, v, s, L):
     """s-aware: the shared helper in build_rhm_slides draws s=2 block lines."""
     fig = plt.figure(figsize=PAGE)
@@ -425,8 +437,9 @@ def page_traces(pdf, tr, n_show=5):
     pdf.savefig(fig); plt.close(fig)
 
 
-def page_conclusion(pdf, cells, ks_rows, kl_rows):
+def page_conclusion(pdf, cells, ks_rows, kl_rows, rows):
     keys = sorted(cells)
+    fz, fn = floor_cells(rows)
     ratio = med([cells[k]['adapt']['success'] / cells[k]['fixed']['success']
                  for k in keys if cells[k]['fixed']['success'] > 0])
     by = defaultdict(list)
@@ -441,12 +454,13 @@ def page_conclusion(pdf, cells, ks_rows, kl_rows):
     rows = [
         ('choose the window adaptively vs any fixed k', '%.0fx' % ratio,
          '%d/%d cells' % (len(keys), len(keys)), 'the length scale is the whole story'),
-        ('add hshunt\'s entropy floor h_min > 0', 'worse', '10/10 cells',
+        ('add hshunt\'s entropy floor h_min > 0', 'worse', '%d/%d cells' % (fz, fn),
          'h_min=0 (bare support) is best everywhere'),
         ('add the count floor n_min > 1', 'worse', 'both P rungs',
          'same mechanism: rejection shortens the window'),
         ('replace per-site choice with its own k(t)', '%.0f%% kept' % (100 * sa),
-         '9/9 cells', 'at matched mean k -- same budget, worse spent'),
+         '%d/%d cells' % (len(by), len(by)),
+         'at matched mean k -- same budget, worse spent'),
         ('predict k from position (block offset)', 'R^2<0.001', '18/18 runs',
          'no positional signature at all'),
         ('predict k from local reveal count', 'R^2<=%.2f' % mx, '18/18 runs',
@@ -506,6 +520,8 @@ def main():
         by[(r['v'], r['rule_seed'])].append(r)
     sa = med([max(g['arms']['sched']['success'] for g in by[k])
               / max(g['arms']['adaptive']['success'] for g in by[k]) for k in by])
+    fz, fn = floor_cells(s3)
+    mx = max(r['r2_step_nrev'] for r in kl_rows)
 
     out = ROOT / args.out
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -518,12 +534,14 @@ def main():
             'per site, not per step',
             ['The criterion "largest window matching any training patch" beats the best\n'
              'FIXED window in %d/%d cells, median %.0fx.' % (len(keys), len(keys), ratio),
-             'Every floor on top of it loses: the entropy floor h_min in 10/10 cells,\n'
-             'and its count rival n_min at both P rungs. Rejection only shortens.',
+             'Every floor on top of it loses: the entropy floor h_min in %d/%d cells,\n'
+             'and its count rival n_min at both P rungs. Rejection only shortens.'
+             % (fz, fn),
              'Replacing the per-site choice by its own induced k(t) schedule, at the\n'
-             'SAME mean k, keeps only %.0f%% of the success (9/9 cells).' % (100 * sa),
+             'SAME mean k, keeps only %.0f%% of the success (%d/%d cells).'
+             % (100 * sa, len(by), len(by)),
              'Position explains none of the choice (R^2 < 0.001); local reveal count\n'
-             'explains at most 0.47. The rest is irreducibly content-dependent.',
+             'explains at most %.2f. The rest is irreducibly content-dependent.' % mx,
              's=3, L=2 is the first board where this question is even askable:\n'
              'at s=2 the only rung between U1 and the grid side is U1 itself.'])
         page_tokenization(pdf, grid0, v=2, s=3, L=2)
@@ -532,7 +550,7 @@ def main():
         page_schedule(pdf, ks_rows)
         page_locality(pdf, kl_rows)
         page_traces(pdf, tr)
-        page_conclusion(pdf, cells, ks_rows, kl_rows)
+        page_conclusion(pdf, cells, ks_rows, kl_rows, s3)
     print('wrote %s (%.2f MB)' % (out, out.stat().st_size / 1e6))
 
 

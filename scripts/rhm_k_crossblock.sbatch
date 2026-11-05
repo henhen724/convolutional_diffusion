@@ -31,6 +31,15 @@
 #   3. Control: n_sym_local on top of (nrev, nw) adds < 0.02, being a
 #      coarsening of nw (symbols rather than words).
 #
+# Second pass (2026-11-05), after the first 18/18 came back: all three held
+# (net gain median +0.196, range +0.116..+0.294, null <= 0.001; tighter
+# 45.8-70.7%; ctrl <= 0.002).  But frac_dead -- no root production surviving
+# every block at once -- runs 19.4% at v2 to 65.9% at v4, so n_sym_root may be
+# acting as a binary "already globally doomed" flag rather than carrying graded
+# cross-block information.  This pass adds r2_dead (that flag in nsr's place)
+# and splits the gain into gain_dead + gain_graded.  No direction registered:
+# either split is a real finding, and I want the number before I claim which.
+#
 # Standing caution from the last two rounds: my stated *mechanisms* have been
 # refuted twice (the n_words sign, and "gain grows with v"), while the
 # predictive claims held.  So k_by_tighter is printed as a diagnostic, not as

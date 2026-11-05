@@ -253,6 +253,14 @@ def main():
             base_l = r2(ks, joint(c['nrev'], c['nw'], c['nsl']))
             full = r2(ks, joint(c['nrev'], c['nw'], c['nsl'], c['nsr']))
             null = r2(ks, joint(c['nrev'], c['nw'], c['nsl'], nsr_shuf))
+            # Is the gain just "this configuration is already globally dead"?
+            # nsr == 0 means no root production survives every block at once.
+            # That fires at 20-66% of observations and rises steeply with v, so
+            # a binary doomed/alive flag could carry the whole gain without any
+            # graded cross-block information in it.  r2_dead is that flag in
+            # nsr's place; full - dead is what grading the count still buys.
+            dead = (c['nsr'] == 0).astype(np.int64)
+            r2_dead = r2(ks, joint(c['nrev'], c['nw'], c['nsl'], dead))
             tighter = float((c['nsr'] < c['nsl']).mean())
             row = dict(v=args.v, s=args.s, L=args.L, m=args.m, rule_seed=rs, P=P,
                        n_gen=args.n_gen, n_obs=int(ks.size),
@@ -266,8 +274,11 @@ def main():
                        r2_base_nsl=base_l,           # + within-block control
                        r2_full=full,                 # + cross-block feature
                        r2_null=null,                 # + shuffled, the floor
+                       r2_dead=r2_dead,              # + binary doomed flag
                        gain=full - base_l,
                        gain_null=null - base_l,
+                       gain_dead=r2_dead - base_l,
+                       gain_graded=full - r2_dead,
                        r2_nrev_nw_nsr=r2(ks, joint(c['nrev'], c['nw'], c['nsr'])),
                        k_by_tighter=[
                            float(ks[c['nsr'] < c['nsl']].mean())
@@ -276,11 +287,13 @@ def main():
                            if (c['nsr'] == c['nsl']).any() else float('nan')])
             rows.append(row)
             print('v%d m%d rs%d P=%-5d k %.3f | base %.3f +nsl %.3f (ctrl %+.3f)'
-                  ' +nsr %.3f (GAIN %+.3f, null %+.3f, net %+.3f) | tighter'
-                  ' %.1f%% dead %.1f%% | k tight/loose %.2f/%.2f'
+                  ' +nsr %.3f (GAIN %+.3f, null %+.3f, net %+.3f) | dead flag'
+                  ' %+.3f, graded %+.3f | tighter %.1f%% dead %.1f%%'
+                  ' | k tight/loose %.2f/%.2f'
                   % (args.v, args.m, rs, P, row['k_mean'], base, base_l,
                      base_l - base, full, full - base_l, null - base_l,
-                     full - null, 100 * tighter, 100 * row['frac_dead'],
+                     full - null, r2_dead - base_l, full - r2_dead,
+                     100 * tighter, 100 * row['frac_dead'],
                      row['k_by_tighter'][0], row['k_by_tighter'][1]))
             sys.stdout.flush()
 
