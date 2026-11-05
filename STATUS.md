@@ -9,7 +9,7 @@ layer-2 posterior (LOG.md, `mls_entropy_barrier_results.ipynb`).
 `P` = training samples before the LS machine emits output **both novel and fully grammatical**.
 > **`P* = exp(Theta(n))`, `n` = sites. At the U=1 window in 2D, `P* = 0.21 |R_L|`.**
 Measured, not derived; the `C(k) = f0^U` ceiling stays retracted. 30 bracketed 2D peaks collapse to median 0.197 while `|R_L|` spans 49 152x; in 1D `ln P*` grows 0.374/site over n=4..16 but `P* = Theta(|R_L|)` fails (`b=0.689+-0.045`). Root needs `k >= U1 = 2s^(L-1)-1`.
-**Estimator-robust (2026-11-05):** swapping the 3-point peak fit for an inverse-variance fit over the whole top of each curve moves the 2D exponent to `b=0.927+-0.033` and the median to 0.177, overlapping CIs -- the scatter it removes was all estimator noise (Open problems). **Subsample-robust too:** refitting on cells with `|R_L| >= 200` only -- a cut chosen for a different purpose, to keep the `P>=10` floor from censoring 1D -- gives `b_2D = 0.979` (0.939 at `>= 1000`), i.e. `x* = |R_L|^-0.02..-0.06`, flat to within 1.4x across **five decades** of `|R_L|`. That flatness is what makes `0.21 |R_L|` a law in 2D; the same fit in 1D gives `|R_L|^-0.36`, which is why it is not one there. **Not yet depth-robust at fixed `(v,m)`:** next steps 6-7, where the paired v=2 ratio (2.5-3.0x) and the exponent (~1.3-1.8x over the same `|R_L|` jump) do not yet agree.
+**Estimator-robust (2026-11-05):** swapping the 3-point peak fit for an inverse-variance fit over the whole top of each curve moves the 2D exponent to `b=0.927+-0.033` and the median to 0.177, overlapping CIs -- the scatter it removes was all estimator noise (Open problems). **Subsample-robust too:** refitting on cells with `|R_L| >= 200` only -- a cut chosen for a different purpose, to keep the `P>=10` floor from censoring 1D -- gives `b_2D = 0.979` (0.939 at `>= 1000`), i.e. `x* = |R_L|^-0.02..-0.06`, flat to within 1.4x across **five decades** of `|R_L|`. That flatness is what makes `0.21 |R_L|` a law in 2D; the same fit in 1D gives `|R_L|^-0.36`, which is why it is not one there. **Depth-robust in 2D, by two routes that agree (2026-11-05):** paired within `(v, m=2)`, `x*(L=2)/x*(L=3)` = 1.58x [0.65, 2.76] (A) / 1.92x [0.94, 2.88] (B) at v=2 and 0.77x / 0.64x at v=3 -- both covering 1 -- which is also what `b_2D` predicts over the same 5e4-fold jump in `|R_L|`. 1D, by contrast, loses **2.5x per single depth step**. The earlier 2.8x 2D reading was an absolute `P >= 10` floor censoring the three smallest grammars; see Open problems. Tightens further when 51244750 lands.
 
 ## B. Open question: why x* = P*/|R_L| differs by dimension
 **Scope label added 2026-11-05.** This section used to read "n=16: 1D 0.083, 2D 0.159, 1.92x apart" with no statement of *which* peak population those came from, and there are three in the repo. All agree on the direction; the gap's size depends on the population, so the label matters:
@@ -136,11 +136,34 @@ excuse for the null.
     reproduces the published x* (A **1.16x** [0.37, 1.84], B 0.90x [0.34, 1.47]); **v=2 gives
     A 2.46x [1.51, 4.09], B 2.95x [1.80, 3.99]** -- excludes 1, same direction as 1D and the same
     size; v=3 covers 1 (1.20x / 1.18x) on only 2 L=3 cells. Awaiting 51244750 for v=2,3 power.
-  - **Confound, unresolved:** `P_min=10` also censors L=2 cells whose peak sits *below* P=10
-    (v=2 L=2 keeps 5 of 8 under A, median rising 0.1901 -> 0.3108), which inflates the ratio.
-    The censoring-free route is the exponent: 2D `x* = |R_L|^-0.02..-0.06`, which over the v=2
-    L=2->3 jump in `|R_L|` predicts only ~1.3-1.8x, not 2.5x. **These two readings disagree and
-    must be reconciled before section A gains a depth clause.**
+  - **Resolved: the v=2 effect was the floor, and the two routes now agree.** An absolute floor is
+    the wrong shape for this cut -- the peak sits at `P* ~ 0.2 |R_L|`, and v=2 m=2 L=2 has
+    `|R_L| = 38..64`, so `P >= 10` lands *on* the peak. `rhm_copy_regime.py` finds 4 of 29 L=2
+    cells with `0.2|R_L| < 10`, **all of them at v=2** -- the one v that claimed an effect.
+    Replacing it with a cell-relative cut on the regime's own signature (`--copy_rel 0.5`, below)
+    keeps all 8 v=2 cells and the ratio falls to **1.58x [0.65, 2.76]** (A) / **1.92x [0.94, 2.88]**
+    (B), covering 1; the three censored cells are exactly the smallest grammars (`|R_L|` 38/44/40,
+    `P*` 3.9/4.7/8.7), and dropping them moved the L=2 median 0.1901 -> 0.3108. v=3 runs the
+    *opposite* way (0.77x / 0.64x) and the v=4 control still passes (1.17x / 0.87x).
+    **That 1.6-1.9x is what the exponent predicts**: `b_2D = 0.945..0.979` over a 5e4-fold jump in
+    `|R_L|` gives `(5e4)^(1-b)` = 1.25-1.8x. Two independent routes, one censoring-free, now agree.
+    **Reading: no 1D-sized depth effect in 2D.** 1D loses 2.5x per *single* depth step at far
+    smaller `|R_L|` changes; 2D drifts 1.6-1.9x across 5e4 in `|R_L|`, not resolvable from 1 at
+    this power. Section A stands as written, with `x*` understood as `|R_L|^-0.02..-0.06` rather
+    than a constant. 51244750 tightens the L=3 side (3 -> 8-10 seeds); re-run both routes then.
+- **How to cut the copying regime without censoring by `P`** (`scripts/rhm_copy_regime.py`, and
+  `--copy_rel` in the depth analysis). Among the *grammatical* outputs, the novelty rate relative
+  to a uniform draw from the support,
+  `ratio = (success/grammatical) / (1 - train_distinct/|R_L|)`, is computable from every row of
+  every sweep already on disk, at no compute cost. It runs **0.006 -> 0.35** across the v=4 L=2
+  ladder and **0.19 -> 0.50** across v=2's: the machine starts by replaying its training set and
+  then spreads out. A *fixed* threshold does not transfer -- L=2 never reaches 1 (L=3 does, ~0.92,
+  so the machine genuinely generalizes there), and `ratio >= 0.5` would push v=4's argmax from 100
+  to 500 and v=3's off the ladder. What transfers is each cell's own plateau: drop the **leading**
+  run of points below `0.5x` the median ratio over the top half of the curve. Leading only -- the
+  zero-success tail at large P is real and defines the falling side. Its own cost, stated: it
+  rejects 3 of 8 cells at v=3 and 3 of 8 at v=4 (the argmax lands on the new boundary), so it is
+  not free either -- it is just not correlated with `|R_L|`, which is the property that matters.
 - **Copying regime at tiny P (new, affects any ladder starting below P~10).** With 2-3 training
   grids the machine has no dictionary, emits near-copies, and they score *novel* only because the
   training set is too small to match against: v4m2 rs3 has success 0.0070 at P=3 against 0.0032 on

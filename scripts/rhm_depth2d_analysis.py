@@ -62,7 +62,47 @@ def load_RL(paths):
     return out
 
 
-def load_curves(specs, RL, P_min=0.0):
+def copy_mask(Ps, succ, gram, td, R, copy_rel):
+    """Leading-edge cut on the copying regime, in units of the cell's own curve.
+
+    An absolute `P >= 10` floor is the wrong shape for this: the peak sits at
+    P* ~ 0.2 |R_L|, and v=2 m=2 L=2 has |R_L| = 38..64, so the floor lands on
+    the peak of exactly the cells the depth test needs.  `rhm_copy_regime.py`
+    shows 4 of 29 L=2 cells have 0.2 |R_L| < 10, all of them at v=2 -- which is
+    the one v where the paired test claimed an effect.
+
+    The regime itself is visible without mentioning P.  Among the grammatical
+    outputs, the novelty rate relative to a uniform draw from the support,
+
+        ratio = (success / grammatical) / (1 - train_distinct / |R_L|),
+
+    runs 0.006 -> 0.35 across the v=4 ladder and 0.19 -> 0.50 across v=2's: the
+    machine starts out replaying its training set and then spreads out.  It
+    never reaches 1 at L=2 (it does at L=3, ~0.92), so a fixed threshold on
+    `ratio` is not transferable -- it would push v=4's argmax from 100 to 500
+    and v=3's off the ladder.  What transfers is the comparison to the cell's
+    OWN plateau: take `ref` as the median ratio over the top half of the curve
+    and drop the LEADING run of points below `copy_rel * ref`.  Leading only --
+    the zero-success tail at large P is real and defines the falling side.
+    """
+    with np.errstate(divide='ignore', invalid='ignore'):
+        nov_g = np.where(gram > 0, succ / np.where(gram > 0, gram, 1.0), np.nan)
+        chance = 1.0 - np.minimum(td, R) / R
+        ratio = np.where(chance > 0, nov_g / np.where(chance > 0, chance, 1.0), np.nan)
+    keep = np.ones(len(Ps), bool)
+    if copy_rel <= 0 or succ.max() <= 0:
+        return keep, ratio
+    top = succ >= 0.5 * succ.max()
+    ref = np.nanmedian(ratio[top]) if np.isfinite(ratio[top]).any() else np.nan
+    if not np.isfinite(ref) or ref <= 0:
+        return keep, ratio
+    ok = np.isfinite(ratio) & (ratio >= copy_rel * ref)
+    first = int(np.argmax(ok)) if ok.any() else len(Ps)
+    keep[:first] = False
+    return keep, ratio
+
+
+def load_curves(specs, RL, P_min=0.0, copy_rel=0.0):
     """[(tag, glob)] -> {(tag, v, m, s, L, rs, k): (P, succ, n)} at k = U1."""
     grouped = defaultdict(list)
     for tag, pat in specs:
@@ -83,18 +123,26 @@ def load_curves(specs, RL, P_min=0.0):
             continue
         # Pool duplicate ladder points: same P measured twice is one binomial
         # with the counts added, not two observations to be interleaved.
-        by_P = defaultdict(lambda: [0.0, 0.0])
+        by_P = defaultdict(lambda: [0.0, 0.0, 0.0, 0.0])
         for r in rows:
-            n = float(r.get('n_gen', 4096))
-            by_P[r['P']][0] += r['success'] * n
-            by_P[r['P']][1] += n
-        Ps = np.array(sorted(by_P), float)
-        hits = np.array([by_P[p][0] for p in sorted(by_P)], float)
-        ns = np.array([by_P[p][1] for p in sorted(by_P)], float)
-        keep = Ps >= P_min
+            n = float(r.get('n_gen', r.get('n_samples', 4096)))
+            e = by_P[r['P']]
+            e[0] += r['success'] * n
+            e[1] += n
+            e[2] += r.get('grammatical', float('nan')) * n
+            e[3] = max(e[3], float(r.get('train_distinct', r['P'])))
+        order = sorted(by_P)
+        Ps = np.array(order, float)
+        hits = np.array([by_P[p][0] for p in order], float)
+        ns = np.array([by_P[p][1] for p in order], float)
+        gram = np.array([by_P[p][2] for p in order], float)
+        td = np.array([by_P[p][3] for p in order], float)
+        succ = hits / ns
+        keep, _ = copy_mask(Ps, succ, gram / ns, td, float(RL[key[1:6]]), copy_rel)
+        keep &= Ps >= P_min
         if keep.sum() < 3:
             continue
-        out[key] = (Ps[keep], (hits / ns)[keep], ns[keep])
+        out[key] = (Ps[keep], succ[keep], ns[keep])
     return out
 
 
@@ -167,7 +215,16 @@ def main():
                          'so it is a lottery over which few grids were drawn, '
                          'not a scale. Every published 2D L=2 ladder starts at '
                          'P=10, so this floor also makes the v=4 control a '
-                         'like-for-like comparison. Set 0 to see it.')
+                         'like-for-like comparison. Set 0 to see it, and '
+                         'prefer --copy_rel, which cuts the same regime '
+                         'without censoring small-|R_L| cells.')
+    ap.add_argument('--copy_rel', type=float, default=0.0,
+                    help='cut the copying regime by its own signature instead '
+                         'of by an absolute P. Drops the leading run of ladder '
+                         'points whose novelty-among-grammatical rate is below '
+                         'this fraction of the cell\'s plateau value; see '
+                         'copy_mask and scripts/rhm_copy_regime.py. 0.5 is the '
+                         'tested setting. Combine with --P_min 0.')
     ap.add_argument('--frac', type=float, default=0.5)
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--out', default=None)
@@ -185,7 +242,7 @@ def main():
         # pad_mode outside), so they are more of that population, not a new
         # one. Only the seeds and two ladder points differ.
         ('L3pub', a.new + '/L3seed_v*_m2_k7.json'),
-    ], RL, a.P_min)
+    ], RL, a.P_min, a.copy_rel)
     if not curves:
         raise SystemExit('no curves; has 51244089 finished?')
 
@@ -206,7 +263,8 @@ def main():
                          boot_sd_A=geo_sd(ba), boot_sd_B=geo_sd(bb)))
         reps[(tag, v, L, rs)] = (ba / R, bb / R)
 
-    print('cells: %d   (m=2 only, k=U1, block_align=1)' % len(recs))
+    print('cells: %d   (m=2 only, k=U1, block_align=1)   P_min=%g copy_rel=%g'
+          % (len(recs), a.P_min, a.copy_rel))
     print()
     print('--- per cell ---')
     print('%-7s %3s %3s %4s %6s %7s %6s %9s %9s %8s %8s'

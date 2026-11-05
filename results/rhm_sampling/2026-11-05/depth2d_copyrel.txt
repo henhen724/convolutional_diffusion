@@ -1,0 +1,94 @@
+srun: job 51248774 queued and waiting for resources
+srun: job 51248774 has been allocated resources
+The following modules were not unloaded:
+  (Use "module --force purge" to unload all):
+
+  1) math   2) devel
+################ P_min 0, copy_rel 0.5 ################
+cells: 38   (m=2 only, k=U1, block_align=1)   P_min=0 copy_rel=0.5
+
+--- per cell ---
+src       v   L   rs  |R_L|   n_gen     nP      x* A      x* B     sd A     sd B
+L2new     2   2    0     64   16384     25    0.1000    0.0938    1.46x    1.51x
+L2new     2   2    1     64   16384     23    0.3108    0.4914    1.80x    1.42x
+L2new     2   2    2     64   16384     23    0.1634    0.2189    1.45x    1.39x
+L2new     2   2    3     38   16384     25    0.1226    0.1627    1.31x    1.06x
+L2new     2   2    4     44   16384     24    0.0896    0.1156    1.00x    1.15x
+L2new     2   2    5     44   16384     24    0.2718    0.2955    1.49x    1.59x
+L2new     2   2    6     40   16384     25    0.2169    0.3145    1.13x    1.13x
+L2new     2   2    7     64   16384     23    0.2580    0.2500    1.00x    1.22x
+L2new     3   2    0     96   16384     20      -         -       1.30x    1.53x
+L2new     3   2    1     96   16384     23    0.3261    0.2699    1.35x    1.37x
+L2new     3   2    2     96   16384     24    0.1509    0.1667    1.03x    1.53x
+L2new     3   2    3     96   16384     20      -         -         -        -  
+L2new     3   2    4     96   16384     22      -         -       1.03x    1.13x
+L2new     3   2    5     96   16384     21    0.1608    0.1031    1.01x    1.31x
+L2new     3   2    6     80   16384     24    0.0610    0.0625    1.00x    1.00x
+L2new     3   2    7     88   16384     23    0.5754    0.5682    2.61x    2.35x
+L2new     4   2    0    128   16384     16    0.7729    0.6269    1.19x    1.16x
+L2new     4   2    1    128   16384     19    0.3924    0.4020    1.01x    1.21x
+L2new     4   2    2    128   16384     19    0.5114    0.3368    1.16x    1.31x
+L2new     4   2    3    128   16384     24      -         -       1.00x    1.12x
+L2new     4   2    4    128   16384     17      -         -       1.30x    1.39x
+L2new     4   2    5    128   16384     18      -         -         -        -  
+L2new     4   2    6    128   16384     16    0.4941    0.3809    1.24x    1.20x
+L2new     4   2    7    128   16384     21    0.2605    0.1912    1.40x    1.28x
+L2pub     4   2    0    128    8192     23    0.7677    0.6148    1.27x    1.33x
+L2pub     4   2    1    128    8192     25    0.3629    0.4306    1.02x    1.16x
+L2pub     4   2    2    128    8192     25      -         -       1.40x    1.71x
+L2pub     4   2    3    128    8192     24    0.2860    0.4083    1.42x    1.45x
+L2pub     4   2    4    128    8192     25    0.3361    0.3274    1.28x    1.26x
+L3pub     2   3    0 4194304    1024      7    0.1567    0.1223    1.18x    1.14x
+L3pub     2   3    1 4194304    1024      7    0.2075    0.1727    1.16x    1.13x
+L3pub     2   3    2 2057216    1024      7    0.0970    0.0844    1.17x    1.08x
+L3pub     2   3    3 2490368    1024      8    0.0936    0.0987    1.32x    1.06x
+L3pub     2   3    4 1237680    1024      6    0.0989    0.1051    1.11x    1.06x
+L3pub     3   3    0 6291456    1088      6      -         -       1.12x    1.40x
+L3pub     3   3    1 301440    1088      6    0.8041    0.9952    2.55x    2.28x
+L3pub     3   3    2 6291456    1024      5    0.2108    0.2544    1.14x    1.30x
+L3pub     3   3    3 6291456    1024      6    0.2913    0.3281    1.11x    1.18x
+
+--- control: v=4 m=2 L=2, new settings vs published ---
+est  new (8 seeds, n_gen 16384)   published (n_gen 8192)       ratio new/pub
+A    0.4941  (5 cells)            0.3495  (4 cells)            1.17x  [0.53, 1.85]
+B    0.3809  (5 cells)            0.4195  (4 cells)            0.87x  [0.38, 1.51]
+
+--- paired depth test: x*(L=2) / x*(L=3) at fixed (v, m=2) ---
+registered 2: if 2D behaves like 1D, x*(L=3) < x*(L=2), i.e. ratio > 1
+est    v L=2                    L=3                    ratio L2/L3 [95% CI]
+A      2 0.1901 (8)             0.0989 (5)             1.58x  [0.65, 2.76]   covers 1
+A      3 0.1608 (5)             0.2913 (3)             0.77x  [0.26, 1.67]   covers 1
+B      2 0.2344 (8)             0.1051 (5)             1.92x  [0.94, 2.88]   covers 1
+B      3 0.1667 (5)             0.3281 (3)             0.64x  [0.24, 1.25]   covers 1
+
+--- reading ---
+No depth effect resolvable at this power.  With the L=3 side at
+3 seeds and n_gen=1024 (per-cell spread up to 3.5x), only an
+effect of roughly the 1D size (~2.8x) would clear these bars, so
+this is NOT a demonstration that x* is depth-stable in 2D.
+
+wrote /scratch/users/hshunt/convolutional_diffusion/results/rhm_sampling/2026-11-05/depth2d_copyrel.json
+
+################ P_min 10, copy_rel 0 (previous) ################
+L3pub     3   3    0 6291456    1024     10      -         -       1.12x    1.37x
+L3pub     3   3    1 301440    1024     10    0.8041    0.9952    2.67x    2.30x
+L3pub     3   3    2 6291456    1024      6    0.2108    0.2544    1.14x    1.28x
+L3pub     3   3    3 6291456    1024      8    0.2913    0.3281    1.09x    1.19x
+
+--- control: v=4 m=2 L=2, new settings vs published ---
+est  new (8 seeds, n_gen 16384)   published (n_gen 8192)       ratio new/pub
+A    0.4432  (8 cells)            0.3495  (4 cells)            1.12x  [0.35, 1.84]
+B    0.3588  (8 cells)            0.4195  (4 cells)            0.93x  [0.39, 1.63]
+
+--- paired depth test: x*(L=2) / x*(L=3) at fixed (v, m=2) ---
+registered 2: if 2D behaves like 1D, x*(L=3) < x*(L=2), i.e. ratio > 1
+est    v L=2                    L=3                    ratio L2/L3 [95% CI]
+A      2 0.3108 (5)             0.0989 (5)             2.82x  [1.49, 4.05]   <- excludes 1
+A      3 0.2905 (8)             0.2913 (3)             1.11x  [0.45, 2.01]   covers 1
+B      2 0.3150 (5)             0.1051 (5)             3.13x  [2.05, 3.90]   <- excludes 1
+B      3 0.3432 (8)             0.3281 (3)             1.14x  [0.52, 1.91]   covers 1
+
+--- reading ---
+Resolved in 2 of 4 (estimator, v) pairs; 2 with x*(L=3) lower,
+which is the 1D direction.  If this holds, section A's
+P* = 0.21 |R_L| is depth-dependent and needs restating.
