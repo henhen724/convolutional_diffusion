@@ -1,7 +1,7 @@
 # STATUS
 
-**RHM sampling complexity** is answered and delivered (was due 12:00 PT Fri 11/6). Running: **51143385**
-(s3 v2m3), **51153821** (per-site vs schedule, 9 cells). **MLS** is parked on hshunt's corrected
+**RHM sampling complexity** is answered and delivered (was due 12:00 PT Fri 11/6). Running:
+**51143385** (s3 v2m3, the last 2 of 12 fair-test cells). **MLS** is parked on hshunt's corrected
 layer-2 posterior (LOG.md, `mls_entropy_barrier_results.ipynb`).
 
 ## A. The answer
@@ -22,17 +22,19 @@ rungs 5/7/9) is the first fair test; **10 of 12 cells** (`rhm_adaptive_s3_score.
 
 ## D. The patch size is per-site, not a schedule -- answers "how are you setting it over time?"
 `rhm_k_schedule.py`: four matched arms, control schedule derived from the adaptive arm's *own* trace
-so it cannot be rigged. v2m2 rs0 P=300, n_gen 4096, success: **adaptive .4363 | criterion capped to
-its own schedule .4412 | bare schedule .0925 | fixed k=7 .0444.** The bare schedule runs at the
-*same mean k* (8.309 vs 8.297) and still loses 4.7x; capping costs nothing.
+so it cannot be rigged. **9 cells, `rhm_ksched_score.py`: adaptive beats the bare schedule 9/9 and
+the best fixed k 9/9** (median 8.2x at v2, ~65x at v3/v4). The schedule recovers a median **15%** of
+adaptive success while spending the *same window budget* -- median mean-k gap 0.08. Capping the
+criterion to its own schedule is free at v2 but costs 8-30% at v3/v4 (within 20% in 5/9).
 > **Time alone cannot set the patch size. What matters is which *site* gets which size.**
 `rhm_k_locality.py` says what the site signal is *not*: chosen k regressed on the site's offset within its level-1 block gives **R^2 = 0.000 in 18/18 runs**, adding nothing jointly with step either. Step alone explains 0.09-0.21 (v2), 0.22-0.36 (v3), 0.30-0.41 (v4), rising with `v`, falling with `P`.
 The local **revealed-neighbour count** (how many of the 9x9 around a site are fixed) beats step in
 18/18 and subsumes it -- adding step on top gains only .005-.013 -- so the schedule is a *consequence*
 of that count. But it caps at .47: the rest turns on *which* tokens were revealed, not how many.
 > **Position 0%, time <=41%, local reveal count <=47%, remainder >=53% genuinely content-dependent.**
-Caveat: this makes my registered 51153821 prediction (schedule does relatively worse as `v` grows)
-doubtful -- the schedule in fact explains *more* of k at high `v`.
+The caveat I raised from this against the 51153821 prediction was **wrong**: sched/adaptive does
+fall with `v` (.212 -> .140, non-monotone, 3 seeds/v). R^2 in k is not decision quality -- the
+schedule can explain more of k at high `v` and still pick wrong at the sites that cost the most.
 
 ## E. Pooling costs the sampler, not the support, and not via phase count
 `gram_phase/gram_pooled = pool_cost x (eff ratio)`, `pool_cost` exact from enumeration (`rhm_straddle.py:165`). **50 cells: 3.51x = 1.06x (support) x 3.21x (sampler)**; the pooled sampler reaches 0.28 of its own ceiling, per-phase 0.89. The registered prediction that the ratio grows with phases mixed is **refuted**: s=2 (4 phases) 4.04x over 86 cells, s=3 (9 phases) 3.20x over 14.
@@ -44,8 +46,8 @@ doubtful -- the schedule in fact explains *more* of k at high `v`.
 - **Blocked on hshunt (MLS):** the corrected layer-2 posterior. Nothing MLS runs until it lands.
 
 ## Next steps
-1. When 51153821 lands, fold C+D into the fair-test deck + notebook (traces from
-   `rhm_adaptive_trace.py --k_fixed`, tokenization page) and upload. 51143385 finishes v2m3.
+1. Build the C+D deck + notebook (`build_s3_slides.py`, traces from `rhm_adaptive_trace.py
+   --k_fixed`, tokenization page) and upload. Rebuild once 51143385 adds the last 2 cells.
 2. The local signal is online and not positional. Next candidate regressor: the revealed-neighbour
    count in the site's own window, which unlike phase changes sample to sample.
 

@@ -99,3 +99,12 @@ holds the live state.
   so the k(t) schedule is a consequence of that count rather than an independent factor -- but it
   caps at .47, leaving >=53% turning on *which* tokens were revealed. The criterion is irreducibly
   content-dependent, which is why section D's bare schedule loses at matched mean k.
+- The per-site window result generalises: 9 cells (v=2,3,4 x 3 seeds, `rhm_ksched_score.py`),
+  adaptive beats the bare schedule 9/9 and the best fixed k 9/9, the schedule recovering a median
+  15% of adaptive success at a median mean-k gap of 0.08 -- the arms really do spend the same
+  window budget. Two corrections against me. (a) The caveat I raised from the locality R^2 was
+  wrong: sched/adaptive does fall with v (.212 -> .140, though non-monotone at 3 seeds/v), so the
+  prediction registered in rhm_k_schedule.sbatch holds. Variance explained in k is not decision
+  quality -- the schedule can track k better at high v and still pick wrong where it costs most.
+  (b) "Capping the criterion to its own schedule costs nothing" was a v2 artifact; at v3/v4 it
+  costs 8-30%, within 20% of adaptive in only 5/9 cells.
