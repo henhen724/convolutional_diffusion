@@ -459,10 +459,82 @@ def page_crossblock(pdf, xb):
     pdf.savefig(fig); plt.close(fig)
 
 
-def page_traces(pdf, tr, n_show=5):
+def page_bp(pdf, bp):
+    """Does the EXACT posterior find anything the consistency bit missed?"""
+    fig = plt.figure(figsize=PAGE)
+    fig.suptitle('6. The bit survives the exact posterior -- and so does the null',
+                 fontsize=20, weight='bold')
+    bp = sorted(bp, key=lambda r: (r['v'], r['rule_seed'], r['P']))
+    x = np.arange(len(bp))
+    gd = [r['gain_dead'] for r in bp]
+    gg = [r['gain_graded'] for r in bp]
+    cg = [r['gain_cnt_graded'] for r in bp]
+
+    ax = fig.add_axes([0.075, 0.615, 0.40, 0.265])
+    # Both "on top" series are +0.000, so they are drawn as markers rather than
+    # stacked bars: a legend swatch for a bar nobody can see reads as a missing
+    # series instead of a zero one.  ylim dips below 0 to lift them off the axis.
+    ax.bar(x, gd, 0.78, color='#777', label='the consistency bit (median %+.3f)' % med(gd))
+    ax.plot(x - 0.18, gg, '_', c='#b40426', ms=8, mew=2.2,
+            label='exact posterior $h_{root}$ on top (%+.3f)' % med(gg))
+    ax.plot(x + 0.18, cg, 'k_', ms=8, mew=2.2,
+            label='survivor count on top (%+.3f)' % med(cg))
+    ax.axhline(0.02, ls='--', c='#111', lw=1.2)
+    ax.text(0.3, 0.030, 'registered threshold 0.02', fontsize=8)
+    ax.set_xticks([]); ax.set_xlabel('cell (v x rule seed x P)', fontsize=9)
+    ax.set_ylabel('$R^2$ added to (reveal count,\nn_words, $h_{local}$, dead)', fontsize=9.5)
+    ax.legend(frameon=False, fontsize=8, loc='upper center')
+    ax.set_ylim(-0.022, max(gd) * 1.45)
+    ax.set_title('%d/%d cells clear 0.02' % (sum(1 for g in gg if g >= 0.02), len(gg)),
+                 fontsize=12.5)
+
+    ax2 = fig.add_axes([0.585, 0.615, 0.365, 0.265])
+    la = [r['r2_hleaf_alone'] for r in bp]
+    lg = [r['gain_hleaf'] for r in bp]
+    ax2.bar(x, la, 0.78, color='#3b4cc0', label='alone (median %.3f)' % med(la))
+    ax2.plot(x, lg, 'k_', ms=8, mew=2.2,
+             label='added to the baseline (%+.3f)' % med(lg))
+    ax2.set_xticks([]); ax2.set_xlabel('cell', fontsize=9)
+    ax2.set_ylabel('$R^2$ in the chosen k', fontsize=9.5)
+    ax2.legend(frameon=False, fontsize=8, loc='upper center')
+    ax2.set_ylim(-0.030, max(la) * 1.45)
+    ax2.set_title('$h_{leaf}$: posterior entropy at the site itself', fontsize=12.5)
+
+    nb = [r['n_hr_bins_alive'] for r in bp]
+    nv = [r['n_hr_vals_alive'] for r in bp]
+    fz = [100 * r['frac_hr_zero_alive'] for r in bp]
+    txt = ('Page 5 rested on a COUNT, which only asks which symbols are possible, never how\n'
+           'probable. BP is exact on this tree, so the graded version is closed-form:\n'
+           'h_root = H(block symbol | ALL observed leaves). If the criterion tracked anything\n'
+           'softer than a yes/no consistency check, that is where it would show up.\n\n'
+           'It does not. On top of (reveal count, n_words, h_local, dead) the exact posterior\n'
+           'gains %+.3f in %d/%d cells, net %+.3f of its null. The bit itself re-earns %+.3f\n'
+           '[%+.3f..%+.3f], reproducing page 5 to three decimals from an independent\n'
+           'computation -- and BP deadness equals the enumeration predicate at %.4f in %d/%d.\n\n'
+           'The feature had room to grade: %d-%d bins over %d-%d distinct values, the zero atom\n'
+           '(root pins the symbol) at %.0f-%.0f%% of live observations. So this null is a much\n'
+           'harder statement than the count\'s was: the BAYES-OPTIMAL posterior adds nothing\n'
+           'over one bit. That was the outcome I registered as the stronger of the two.\n\n'
+           'Unregistered, same BP pass: h_leaf, the exact posterior entropy at the SITE\'s own\n'
+           'token -- the quantity you named for this criterion. It explains %.3f of k alone and\n'
+           'adds %+.3f over the baseline. The criterion behaves CONSISTENTLY WITH tracking a\n'
+           'posterior entropy, while that entropy holds nothing the reveal count, the block\'s\n'
+           'word count and the bit do not already hold.'
+           % (med(gg), sum(1 for g in gg if g >= 0.02), len(gg),
+              med([r['gain_graded_net'] for r in bp]), med(gd), min(gd), max(gd),
+              med([r['bp_enum_agree'] for r in bp]),
+              sum(1 for r in bp if r['bp_enum_agree'] > 0.99), len(bp),
+              min(nb), max(nb), min(nv), max(nv), min(fz), max(fz),
+              med(la), med(lg)))
+    fig.text(0.065, 0.545, txt, fontsize=9.6, va='top', family='monospace',
+             linespacing=1.32)
+    pdf.savefig(fig); plt.close(fig)
+
+
+def page_traces(pdf, tr, n_show=5, num=6):
     fig = plt.figure(figsize=PAGE)
     cfg = tr['config']
-    fig.suptitle('6. Example traces: the window size moving along one generation',
+    fig.suptitle('%d. Example traces: the window size moving along one generation' % num,
                  fontsize=20, weight='bold')
     side = int(round(cfg['n_sites'] ** 0.5))
 
@@ -529,7 +601,7 @@ def page_traces(pdf, tr, n_show=5):
     pdf.savefig(fig); plt.close(fig)
 
 
-def page_conclusion(pdf, cells, ks_rows, kl_rows, rows, xb=()):
+def page_conclusion(pdf, cells, ks_rows, kl_rows, rows, xb=(), bp=()):
     keys = sorted(cells)
     fz, fn = floor_cells(rows)
     ratio = med([cells[k]['adapt']['success'] / cells[k]['fixed']['success']
@@ -569,13 +641,30 @@ def page_conclusion(pdf, cells, ks_rows, kl_rows, rows, xb=()):
              'net of a permutation null; hshunt\'s straddle'),
         ]
         rows += rows_xb
-    y, step = 0.80, 0.046 if len(rows) <= 6 else 0.040
+    if bp:
+        gg = [r['gain_graded'] for r in bp]
+        rows += [
+            ('    grade it: exact BP posterior, not a count', '%+.3f R^2' % med(gg),
+             '%d/%d cells' % (sum(1 for g in gg if g >= 0.02), len(gg)),
+             'it is one consistency bit, not evidence'),
+            ('    posterior entropy at the site itself', '%+.3f R^2' % med(
+                [r['gain_hleaf'] for r in bp]),
+             '%d/%d cells' % (len(bp), len(bp)),
+             'explains %.2f alone, nothing once conditioned'
+             % med([r['r2_hleaf_alone'] for r in bp])),
+        ]
+    y, step = 0.80, 0.046 if len(rows) <= 6 else 0.040 if len(rows) <= 8 else 0.034
     fig.text(0.05, 0.855, '%-44s %-11s %-13s %s' % ('what was tried', 'effect', 'support', 'reading'),
              fontsize=12, family='monospace', weight='bold')
     for a, b, c, d in rows:
         fig.text(0.05, y, '%-44s %-11s %-13s %s' % (a, b, c, d),
                  fontsize=11, family='monospace')
         y -= step
+    tail = ('straddling a boundary can see. Page 5 counts it; page 6 redoes it with the\n'
+            '  exact BP posterior and finds the same thing -- it is ONE consistency bit, and\n'
+            '  the site\'s own posterior entropy adds nothing once that bit is conditioned on.'
+            if bp else
+            'straddling a boundary can see. That is page 5.')
     concl = (
         'Answer to "how are you setting the patch size over time?"\n\n'
         '  Not over time. The rule that works is "the largest window that matches any\n'
@@ -587,12 +676,18 @@ def page_conclusion(pdf, cells, ks_rows, kl_rows, rows, xb=()):
         '  a shorter one rather than on a better one.\n\n'
         '  What the site-dependence IS, is grammar: the block\'s own ambiguity, and then\n'
         '  its consistency with the other blocks through the root -- which only a window\n'
-        '  straddling a boundary can see. That is page 5.\n\n'
+        '  %s\n\n'
         'Caveat: all of this is s=3, L=2 (9x9, rungs 5/7/9), v in {2,3,4}, m=2 mostly,\n'
         'n_gen=4096. Deeper boards need k >= U1 = 2s^(L-1)-1, which is out of reach at L=4.'
-        % (100 * sa))
-    fig.text(0.05, y - 0.01, concl, fontsize=11.5, va='top', family='monospace',
-             linespacing=1.42)
+        % (100 * sa, tail))
+    # The table grows as rows are added, so size the conclusion block to the
+    # space actually left rather than to a literal: the last line went off the
+    # bottom of the page the first time two rows were appended.
+    top, ls = y - 0.01, 1.42
+    nline = concl.count('\n') + 1
+    fs = min(11.5, (top - 0.035) * PAGE[1] * 72 / (nline * ls))
+    fig.text(0.05, top, concl, fontsize=fs, va='top', family='monospace',
+             linespacing=ls)
     pdf.savefig(fig); plt.close(fig)
 
 
@@ -612,10 +707,12 @@ def main():
     ks_rows = load_glob(args.results, 'ksched_*.json')
     kl_rows = load_glob(args.results, 'klocal_*.json')
     xb_rows = load_glob(args.crossblock, 'kxblock_*.json')
+    bp_rows = load_glob(args.crossblock, 'kbp_*.json')
     nmin_rows = json.load(open(ROOT / args.results / 'nmin_smoke.json'))
     tr = json.load(open(ROOT / args.trace))
-    print('%d s3 rows -> %d cells | %d ksched | %d klocal | %d nmin'
-          % (len(s3), len(cells), len(ks_rows), len(kl_rows), len(nmin_rows)))
+    print('%d s3 rows -> %d cells | %d ksched | %d klocal | %d nmin | %d xb | %d bp'
+          % (len(s3), len(cells), len(ks_rows), len(kl_rows), len(nmin_rows),
+             len(xb_rows), len(bp_rows)))
 
     from src.utils.random_hierarchy import RandomHierarchyModel2D
     rhm = RandomHierarchyModel2D(v=2, s=3, L=2, m=2, seed=1000)
@@ -670,8 +767,10 @@ def main():
         page_locality(pdf, kl_rows)
         if xb_rows:
             page_crossblock(pdf, xb_rows)
-        page_traces(pdf, tr)
-        page_conclusion(pdf, cells, ks_rows, kl_rows, s3, xb_rows)
+        if bp_rows:
+            page_bp(pdf, bp_rows)
+        page_traces(pdf, tr, num=6 + bool(xb_rows) + bool(bp_rows) - 1)
+        page_conclusion(pdf, cells, ks_rows, kl_rows, s3, xb_rows, bp_rows)
     print('wrote %s (%.2f MB)' % (out, out.stat().st_size / 1e6))
 
 
