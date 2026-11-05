@@ -81,9 +81,35 @@ schedule can explain more of k at high `v` and still pick wrong at the sites tha
    landed on that atom and the graded tail got 2 bins. `qbin` now bins the atom separately. The
    gain was +0.000 before and after, so that fixed the objection, not the answer.
    Deck re-rendered to 10 pages (BP page 6, traces now 7) and re-uploaded 2026-11-05.
-5. Open, cheapest next: the cross-block bit is measured only at `s=3 L=2`, where one root production
-   couples 9 blocks. Whether it stays one bit when the root is further away (`L=3`) is untested, and
-   is the first place a graded version could appear.
+5. **In flight: array 51214941** (`scripts/rhm_k_depth.{py,sbatch}`, v=2/3/4, 3 seeds, P 300+1000,
+   `n_gen 64`, ~2.2 h per task). At `L=2` a block's only parent IS the root, so "consistent with the
+   other blocks" and "consistent through the root" are one sentence; `L=3` splits them into a near
+   (within the 9x9 parent) and a far (through the root) coupling. Registered items 1-7 are in the
+   script docstring. **Machinery validated at `L=2`:** `hp-hr 0.0e+00` exactly, parent/root disagree
+   0.0%, and `+near +0.218` reproduces the known cross-block bit from independent code (check 4).
+   **Sizing probes, all committed, which changed the design before the run:**
+   - `dead_root` saturates at `L=3` and nothing buys it range: 98/96/96% at `P=50/300/1000`, and
+     *worse* with `v` (96% at v=2, 99% at v=4; parent-alive 22% -> 11%). It is already 91% dead in
+     the **first third** of the reveal schedule. Structural, not a knob: 729 sites puts
+     `P* = exp(Theta(n))` astronomically beyond `P <= 1000`, so the sampler goes off-grammar almost
+     immediately and the global constraint is violated nearly everywhere. **This is the standing
+     caveat on any L=3 null** -- the far coupling is being read in the deeply under-trained regime.
+   - Hence items **6** (far bit among blocks their parent has not killed, ~82/18 there) and **7**
+     (far bit on the first schedule third), added post-probe and labelled, to give the far coupling
+     its best shot before any null is claimed. Gains also reported as a fraction of residual, since
+     the `L=3` baseline is **0.82** vs `L=2`'s 0.38 -- an absolute 0.02 is a far stiffer bar here.
+   - Footprint measured before raising `--mem`: 28.2 GB peak at `P=3000` against a 32 G cap, RSS
+     linear in patch count, so `P=1000` ~9.4 GB and `P=300` ~3 GB; job asks 24 G. `P=3000` is
+     deliberately not run -- near-OOM and it buys nothing.
+   - `n_gen 64`, not `L=2`'s 512: `27x27` is 9x the sites, so `64 x 729` matches `512 x 81` on
+     `n_obs`. Matching n_obs is the point; matching n_gen would be a 9x overspend.
+   **Smoke direction so far** (v2 P=300 `n_gen` 16, one cell, not the answer): near +0.019 net
+   +0.017 (resid frac 0.103); far marginal +0.002, item 6 +0.0083, item 7 +0.0047 -- all far under
+   0.02. Ordering near >> far at every cut. If that holds across 18 cells, registered 1 is
+   borderline-to-refuted on the absolute bar while clearing 10% of residual, and 2/6/7 are null:
+   the criterion's consistency check reaches its own parent, not the root.
+   Rows are written incrementally, so a timeout still leaves scorable partial JSONs in
+   `results/rhm_sampling/2026-11-05/kdepth_v{2,3,4}_m2_L3.json`.
 
 ## Discipline notes
 - Analysis runs in `srun -p sganguli -t 10 -c 2 --mem=4G`, never a login node; there `ml devel math
