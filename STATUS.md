@@ -9,7 +9,7 @@ layer-2 posterior (LOG.md, `mls_entropy_barrier_results.ipynb`).
 `P` = training samples before the LS machine emits output **both novel and fully grammatical**.
 > **`P* = exp(Theta(n))`, `n` = sites. At the U=1 window in 2D, `P* = 0.21 |R_L|`.**
 Measured, not derived; the `C(k) = f0^U` ceiling stays retracted. 30 bracketed 2D peaks collapse to median 0.197 while `|R_L|` spans 49 152x; in 1D `ln P*` grows 0.374/site over n=4..16 but `P* = Theta(|R_L|)` fails (`b=0.689+-0.045`). Root needs `k >= U1 = 2s^(L-1)-1`.
-**Estimator-robust (2026-11-05):** swapping the 3-point peak fit for an inverse-variance fit over the whole top of each curve moves the 2D exponent to `b=0.927+-0.033` and the median to 0.177, overlapping CIs -- the scatter it removes was all estimator noise (Open problems). **Not yet depth-robust at fixed `(v,m)`:** next step 6.
+**Estimator-robust (2026-11-05):** swapping the 3-point peak fit for an inverse-variance fit over the whole top of each curve moves the 2D exponent to `b=0.927+-0.033` and the median to 0.177, overlapping CIs -- the scatter it removes was all estimator noise (Open problems). **Subsample-robust too:** refitting on cells with `|R_L| >= 200` only -- a cut chosen for a different purpose, to keep the `P>=10` floor from censoring 1D -- gives `b_2D = 0.979` (0.939 at `>= 1000`), i.e. `x* = |R_L|^-0.02..-0.06`, flat to within 1.4x across **five decades** of `|R_L|`. That flatness is what makes `0.21 |R_L|` a law in 2D; the same fit in 1D gives `|R_L|^-0.36`, which is why it is not one there. **Not yet depth-robust at fixed `(v,m)`:** next steps 6-7, where the paired v=2 ratio (2.5-3.0x) and the exponent (~1.3-1.8x over the same `|R_L|` jump) do not yet agree.
 
 ## B. Open question: why x* = P*/|R_L| differs by dimension
 **Scope label added 2026-11-05.** This section used to read "n=16: 1D 0.083, 2D 0.159, 1.92x apart" with no statement of *which* peak population those came from, and there are three in the repo. All agree on the direction; the gap's size depends on the population, so the label matters:
@@ -23,6 +23,8 @@ The **published population is the one to quote**, and 3.87x is the honest headli
 Every n=16 peak in both dimensions already sits at `k=U1`, so the old "(k=U1=15)" qualifier was not doing scoping work. **The published gap is larger than this section recorded, so scoping `P* = 0.21 |R_L|` to 2D is better supported than section A claimed, not worse.** Pooled over n: 1D 0.0834 (110 cells), 2D 0.1966 (30), 2.36x -- that 2D 0.1966 is section A's 0.197.
 **Correction to commit `3a0bcc7`:** that commit claimed 0.159 "reproduces under no statistic" and that 0.083 was the pooled-over-all-n 1D median mislabeled as n=16. Both wrong -- I had searched only the published population. The pair is `BR1`'s, exactly as tabulated above; pooled-over-n 1D being 0.0834 against `BR1`'s 0.0828 is a coincidence that is what misled me. What survives from that commit: the published-population figures, and that my earlier flag against `rhm_collapse_variable.py`'s docstring (0.050 / 0.193 / 3.9x) was **backwards -- the docstring was right**, and it was correctly left unedited. Working files: `results/rhm_sampling/2026-11-05/xstar_{scope,stats}.txt`.
 Three explanations **all refuted**: coverage (sign backwards, Spearman +1.00); saturation `y* = P* n/N_k` (4.4x across dimensions, 61x across k within 1D); entropy budget `exp(H_tot)/|R_L|` (1D 0.68 / 2D 337.6, **496x**). The third did explain k=11 beating U1=15: H_tot falls 11.82 -> 8.21 nats over k=3..17.
+**Fourth refuted 2026-11-05 (`scripts/rhm_xstar_scaling.py`), and this one was measured, not argued.** Since `x* = P*/|R_L| = |R_L|^(b-1)`, `b<1` *is* "x* falls as |R_L| grows" -- so the gap, the 7.6x spread across `(v,m)`, and the depth effect could all be one fact: the two populations sitting at different `|R_L|`. Fitting `log P* = b log|R_L| + c + d*1[2D]` across both dimensions and depths, with each cell's binomial bootstrap carried through, the offset **does not collapse -- it grows**, because 1D cells sit at smaller `|R_L|` and a common `b` over-corrects: `d` = **4.83x (A) / 5.29x (B)** on cells with `|R_L| >= 200`, **6.65x / 7.24x** at `>= 1000`, against a raw gap of 3.87x. What the fit does establish is that **the exponents themselves differ** and no pooled `b` absorbs that: `b_1D = 0.638`, `b_2D = 0.979`, difference **0.340 [0.155, 0.491]** (`|R_L| >= 200`; 0.273 [-0.090, 0.530] at `>= 1000`, where n is small). Those reproduce the published `0.689+-0.045` / `0.965+-0.041` on an independently selected subsample.
+The `|R_L|` floor is load bearing: without it `b_1D` reads **0.510**, because the absolute `P >= 10` floor needed to cut the 2D copying regime censors exactly the 1D cells whose peak lies below it, and that censoring is `|R_L|`-dependent. Restricted to cells where the floor sits far below the peak, the answer is stable between `>= 200` and `>= 1000`.
 
 ## C. hshunt's patch-size criterion: the length scale is everything, the floors are nothing
 s=2 is degenerate (`U1 = side - 1`, one odd rung in `[U1, side]` at every depth). s=3 L=2 (9x9,
@@ -92,7 +94,22 @@ excuse for the null.
 `gram_phase/gram_pooled = pool_cost x (eff ratio)`, `pool_cost` exact from enumeration (`rhm_straddle.py:165`). **50 cells: 3.51x = 1.06x (support) x 3.21x (sampler)**; the pooled sampler reaches 0.28 of its own ceiling, per-phase 0.89. The registered prediction that the ratio grows with phases mixed is **refuted**: s=2 (4 phases) 4.04x over 86 cells, s=3 (9 phases) 3.20x over 14.
 
 ## Open problems
-- The 1D/2D offset has no mechanism after three refutations. No fourth without a measurement.
+- ~~The 1D/2D offset has no mechanism after three refutations. No fourth without a measurement.~~
+  **Fourth measured and refuted 2026-11-05 (`scripts/rhm_xstar_scaling.py`), offset still unexplained.**
+  The candidate was that there is no dimension effect at all, only a scale effect: `x* = |R_L|^(b-1)`,
+  so two populations at different `|R_L|` would show an offset without one existing. Fitting
+  `log P* = b log|R_L| + c + d*1[2D]` over both dimensions and both depths, the offset **grows
+  instead of collapsing** (`d` = 4.83x A / 5.29x B at `|R_L| >= 200`, 6.65x / 7.24x at `>= 1000`,
+  vs a raw gap of 3.87x), because 1D sits at smaller `|R_L|` and a pooled `b` over-corrects it.
+  The positive finding is that **the exponents differ**: `b_1D = 0.638` vs `b_2D = 0.979`,
+  difference **0.340 [0.155, 0.491]** -- matching the published `0.689+-0.045` / `0.965+-0.041` on
+  an independently chosen subsample. In 2D `x* = |R_L|^-0.02..-0.06` is flat across five decades,
+  which is what makes `P* = 0.21 |R_L|` a law there and not in 1D (`|R_L|^-0.36`). So mechanism
+  four is gone and the offset is sharper, not softer: it is now a difference in *exponent*, not
+  only in prefactor.
+  Methodological catch worth keeping: the `P >= 10` floor that removes the 2D copying regime
+  censors small-`|R_L|` 1D cells whose peak lies below it, and that censoring is `|R_L|`-dependent,
+  so without `--min_RL` the fit reads `b_1D = 0.510`. Any `x*` fit across dimensions needs both cuts.
 - ~~2D peaks scatter 4.8x per cell though medians reproduce to 1.2x (raise n_gen first)~~
   **Answered 2026-11-05 (`scripts/rhm_peak_noise.py`, commit `76b6001`): the scatter is the peak
   estimator, not the grammar.** Resampling each measured curve from `Binomial(n_gen, p_hat)` gives
@@ -107,11 +124,30 @@ excuse for the null.
   **2.294**). The headline does not depend on the choice: `b = 0.965+-0.041` (A, med x* 0.197) vs
   `0.927+-0.033` (B, 0.177), overlapping CIs. Still open from this bullet: 2D L=4 needs k=15, out of
   reach; one L=3 curve unbracketed (v3m2 rs0, `x* >= 0.477`).
-- **2D depth-stability at fixed `(v,m)` is untested** -- see next step 6. The 0.21 headline leans on
+- **2D depth-stability at fixed `(v,m)`: measured, not yet settled.** The 0.21 headline leans on
   L=2 pooled 0.1925 (nine combos) against L=3 pooled 0.2075 (two), and those combos are
   **disjoint** while x* varies 7.6x across (v,m) medians. 1D, paired within (v,m), has x* *falling*
-  with depth in **15/15** combos (median ~2.8x, up to 51x), which is exactly why `P* = Theta(|R_L|)`
-  fails there. If 2D does the same, section A needs a depth-dependent statement.
+  with depth in **15/15** combos. Three things changed on 2026-11-05:
+  - **The 1D bar is 2.5x, not 2.8x.** The 2.8x figure spans L=2->4, two depth steps; 2D only has
+    L=2 and L=3. Matched one-step (`rhm_1d_depth_noise.py --L_hi 3`): median **2.52x** (A, 15/15,
+    CI excludes 1 in 7/15) and **2.59x** (B, 14/15, 9/15). The 1D effect is *not* estimator noise:
+    1D per-cell estimator spread is only 1.09x (A) / 1.06x (B).
+  - **Paired 2D test (51244089 + `rhm_depth2d_analysis.py`), with `P_min=10`:** v=4 control
+    reproduces the published x* (A **1.16x** [0.37, 1.84], B 0.90x [0.34, 1.47]); **v=2 gives
+    A 2.46x [1.51, 4.09], B 2.95x [1.80, 3.99]** -- excludes 1, same direction as 1D and the same
+    size; v=3 covers 1 (1.20x / 1.18x) on only 2 L=3 cells. Awaiting 51244750 for v=2,3 power.
+  - **Confound, unresolved:** `P_min=10` also censors L=2 cells whose peak sits *below* P=10
+    (v=2 L=2 keeps 5 of 8 under A, median rising 0.1901 -> 0.3108), which inflates the ratio.
+    The censoring-free route is the exponent: 2D `x* = |R_L|^-0.02..-0.06`, which over the v=2
+    L=2->3 jump in `|R_L|` predicts only ~1.3-1.8x, not 2.5x. **These two readings disagree and
+    must be reconciled before section A gains a depth clause.**
+- **Copying regime at tiny P (new, affects any ladder starting below P~10).** With 2-3 training
+  grids the machine has no dictionary, emits near-copies, and they score *novel* only because the
+  training set is too small to match against: v4m2 rs3 has success 0.0070 at P=3 against 0.0032 on
+  the real hump at P=100, with grammaticality 0.238 at P=3 decaying to 0.020 by P=8. One ladder
+  point wide and seed-specific, but it captures the argmax and inverted the v=4 control (0.42x)
+  until `--P_min 10` was added. Every published 2D L=2 ladder starts at P=10, so nothing published
+  is affected -- this was my own ladder choice.
 - **Blocked on hshunt (MLS):** the corrected layer-2 posterior. Nothing MLS runs until it lands.
 
 ## Next steps
@@ -167,7 +203,7 @@ excuse for the null.
    +0.017, far +0.002, item 6 +0.0083, item 7 +0.0047, same ordering -- so the 18 cells tightened
    the estimate rather than changing the verdict. Rows written incrementally; results in
    `results/rhm_sampling/2026-11-05/kdepth_v{2,3,4}_m2_L3.json` (committed with `git add -f`).
-6. **In flight: 51244089** (`scripts/rhm_depth2d.sbatch`, CPU, 3 h cap). Measures the 2D `L=2 m=2`
+6. **Done (51244089, COMPLETED in 11:27)** (`scripts/rhm_depth2d.sbatch`, CPU, 3 h cap). Measures the 2D `L=2 m=2`
    peaks at **v=2 and v=3**, which have never been run -- m=2 at L=2 exists only for v=4 -- so that
    L=2 can be paired against the existing `L3peak_v{2,3}_m2_k7.json` **at fixed `(v,m)`** instead of
    by pooling over disjoint combos. 25-point ladder at ~1.26x spacing over `P=2..1000` (`|R_L|` is
@@ -186,6 +222,19 @@ excuse for the null.
    [0.66, 2.56]** under B. That covers both 1 and 1D's ~2.8x, so it decides nothing yet -- and the
    binding constraint is the **seed count**, not `n_gen`: per-cell bootstrap spread at L=3 is only
    1.11-1.17x on the well-measured cells.
+   **Then registered item 1 failed and the failure was the finding.** The v=4 control came out at
+   **0.42x**, backwards, with rs3 at 0.0223 against a published 0.2860. Printing the raw curves
+   showed why: the ladder I chose starts at `P=2`, and at `P<=8` the machine is in a *copying*
+   regime (success 0.0070 at P=3 vs 0.0032 on the real hump at P=100; grammaticality 0.238 falling
+   to 0.020 by P=8) where near-copies count as novel because the training set is too small to match
+   against. The artifact is mine, not the model's -- every published 2D L=2 ladder starts at P=10.
+   With `--P_min 10` the control passes (**1.16x** [0.37, 1.84] A, 0.90x [0.34, 1.47] B) and v=2
+   reads **2.46x [1.51, 4.09]** A / **2.95x [1.80, 3.99]** B, excluding 1 in the 1D direction at
+   the 1D size. Two caveats on that, both in Open problems: the floor censors low-peak L=2 cells,
+   and the censoring-free exponent predicts a smaller jump. Also fixed here: estimator B returned
+   `nan` on a rejected fit, and rejections track curve *shape*, so the median ran on a biased
+   subsample (2 of 8 cells at v=3) -- `est_B(..., fallback=True)` now falls back to the argmax as A
+   does, with the default left at False so `rhm_peak_noise`'s committed numbers are untouched.
 7. **In flight: 51244750** (`scripts/rhm_depth2d_L3seeds.sbatch`, array 0-1, 1 H100 each, 10 h cap).
    Takes L=3 m=2 to **10 seeds at v=2** and 8 at v=3 at the published settings, so they pool with
    `L3peak_v*_m2_k7.json` instead of becoming a fourth population. Expected to shrink the interval
@@ -201,6 +250,12 @@ excuse for the null.
    **Incidental, and it mattered:** `|R_L|` is **not** flat across rule seeds even at L=2 --
    v=2 m=2 is 64/64/64 for seeds 0-2 but 38/44/44/40 for seeds 3-6. Recomputing it per seed rather
    than assuming is load bearing, since x* is a ratio to it.
+8. **Done (51246420)** `scripts/rhm_xstar_scaling.py` -- the censoring-free route to both open
+   questions, since it fits an exponent across every cell instead of comparing two medians. Results
+   in Open problems (mechanism four refuted; `b_1D` 0.638 vs `b_2D` 0.979) and section B. **Re-run
+   it when 51244750 lands** -- it already globs `L3seed_v*_m2_k7.json`, and the new L=3 cells are
+   exactly the high-`|R_L|` end where `b_2D` is least constrained. Use `--min_RL 200` (and check
+   1000): without it the P>=10 floor censors small-`|R_L|` 1D cells and `b_1D` reads 0.510.
 
 ## Discipline notes
 - Analysis runs in `srun -p sganguli -t 10 -c 2 --mem=4G`, never a login node; there `ml devel math
