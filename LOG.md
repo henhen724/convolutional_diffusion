@@ -55,3 +55,20 @@ holds the live state.
 - `k(t)` shrinks monotonically along every trajectory at every floor (hshunt's direction, produced
   not imposed). Deck + notebook `rhm_adaptive_window_2026-11-04.ipynb` sent. Next: the int64
   overflow in the `a_j` window code, which is what blocks a real schedule test at L=3 (`U1=7`).
+
+## 2026-11-05
+- The s=3 fair test of hshunt's patch-size criterion (51106614, timed out at 3 h with 8 of 12 cells).
+  Adaptive beats the best fixed k **8/8, median 50.4x**, reversing the s=2 verdict; fixed optimum is
+  k=7 not U1=5 in 7/8; k(t) falls 9.0 -> 5.8..7.5 with span growing in v. **But the best floor is
+  h_min=0 in 8/8 and success is monotonically decreasing in h_min in 8/8** -- accept is
+  `n_match>0 and h>=h_min` and in match mode h = log(effective matching patches), so h_min is a
+  support-diversity floor and 0 is support-existence. The length scale carries the win; the floor
+  subtracts. Trace at v2m2 rs0: adaptive .406 succ / .625 gram vs fixed k=7 .063 / .094.
+- Closed the pooling open problem as a decomposition, not a comparison:
+  `gram_phase/gram_pooled = pool_cost x sampler` = **3.46x = 1.05x x 3.18x** over 10 cells with
+  exact enumerated support. Pooled sampler reaches 0.22 of its own support ceiling, per-phase 0.72.
+  `scripts/rhm_pooling_cost.py`; 51142878 widens it to 50 cells and tests 4 -> 9 phases.
+- Two infrastructure facts worth keeping: `--max_patches` does not bound memory (the table is built
+  before the check, `rhm_sampling_complexity.py:64`), which is what OOM-killed 51141861 on a rung it
+  had just logged as SKIPPED; and under `srun`, `ml devel math python/3.12.1` provides `python3`
+  only, leaving bare `python` at 2.7.5.
