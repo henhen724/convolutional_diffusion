@@ -1,0 +1,36 @@
+srun: job 51245263 queued and waiting for resources
+srun: job 51245263 has been allocated resources
+The following modules were not unloaded:
+  (Use "module --force purge" to unload all):
+
+  1) math   2) devel
+1D U=1 curves scored: 113
+median per-cell estimator noise:  A 1.09x   B 1.06x
+
+--- x* against depth, within each (v, m) ---
+ratio = x*(L=2) / x*(L=max); > 1 means x* FALLS with depth (the 1D claim)
+(v,m)    A: L=2 / L=max     B: L=2 / L=max     A ratio [95% CI]         B ratio [95% CI]        
+v2m2     1.6334/0.1533      1.6646/0.1662      10.28x [5.71, 16.16]     8.38x [2.73, 12.74]     
+v2m3     0.1163/0.0306      0.0927/0.0560      4.40x [1.24, 11.09]      2.31x [1.22, 4.65]      
+v2m4     0.1406/0.0338      0.2023/0.0487      4.02x [1.05, 7.06]       3.57x [0.57, 5.94]      
+v2m5     0.2099/0.1190      0.1293/0.1627      1.74x [0.53, 16.72]      0.89x [0.62, 3.49]      
+v2m6     0.2327/0.0719      nan/0.0571         3.20x [1.27, 7.07]       3.59x [1.56, 10.11]     
+v3m2     0.3474/0.2084      0.3321/0.1570      1.58x [0.59, 2.66]       2.07x [1.37, 2.70]      
+v3m3     0.1478/0.0782      0.1700/0.0770      1.88x [1.35, 2.31]       2.24x [1.66, 3.04]      
+v3m4     0.1773/0.0803      0.1785/0.0624      2.52x [0.72, 6.87]       1.55x [0.96, 6.41]      
+v3m5     0.2126/0.0581      0.2972/0.0394      3.98x [0.88, 23.40]      8.80x [4.22, 33.73]     
+v3m6     0.1639/0.0221      0.1131/0.0179      4.75x [0.69, 26.25]      6.39x [1.86, 31.47]     
+v4m2     0.3351/0.1888      0.4059/nan         1.78x [1.15, 3.35]       1.77x [0.54, 5.49]      
+v4m3     0.1396/0.0791      0.1995/0.0734      1.76x [0.53, 4.91]       1.82x [0.73, 3.20]      
+v4m4     0.1175/0.0433      0.1104/0.0392      1.94x [0.87, 3.74]       2.59x [1.41, 3.49]      
+v4m5     0.0632/0.0319      0.1022/0.0284      2.40x [0.65, 5.27]       2.70x [0.85, 5.95]      
+v4m6     0.0570/0.0237      0.0749/0.0153      2.67x [1.07, 8.50]       3.81x [1.34, 6.79]      
+
+--- reading ---
+  A: x* falls with depth in 15/15 combos; CI excludes 1 in 7/15
+  B: x* falls with depth in 14/15 combos; CI excludes 1 in 9/15
+  The 1D depth effect is NOT an estimator artifact: it holds under
+  an estimator with different bias, and most per-combo intervals
+  clear 1 with estimator noise propagated.
+
+wrote /scratch/users/hshunt/convolutional_diffusion/results/rhm_sampling/2026-11-05/depth1d_noise_1step.json
