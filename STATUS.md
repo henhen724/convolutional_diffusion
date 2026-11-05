@@ -76,6 +76,7 @@ schedule can explain more of k at high `v` and still pick wrong at the sites tha
    wrong reason first: `h_root` is exactly 0 on 71-80% of alive sites, so plain quantile cuts all
    landed on that atom and the graded tail got 2 bins. `qbin` now bins the atom separately. The
    gain was +0.000 before and after, so that fixed the objection, not the answer.
+   Deck re-rendered to 10 pages (BP page 6, traces now 7) and re-uploaded 2026-11-05.
 5. Open, cheapest next: the cross-block bit is measured only at `s=3 L=2`, where one root production
    couples 9 blocks. Whether it stays one bit when the root is further away (`L=3`) is untested, and
    is the first place a graded version could appear.
