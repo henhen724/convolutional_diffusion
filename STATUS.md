@@ -29,7 +29,8 @@ The local **revealed-neighbour count** (how many of the 9x9 around a site are fi
 > **Position 0%, time <=41%, local reveal count <=47%, remainder >=53% genuinely content-dependent.**
 That residual is **grammar, mostly across block boundaries** (`rhm_k_crossblock.py`, 18/18): over
 (nrev, n_words, n_sym_local), the block's admissible-symbol count *after every other block
-constrains it through the root* adds **median +0.196 R^2** (+.116..+.294) net of a permutation null
+constrains it* (at `L=2` that is "through the root"; `L=3` narrows it to the enclosing parent, see
+the depth result below) adds **median +0.196 R^2** (+.116..+.294) net of a permutation null
 of +0.000; within-block control <=+0.002; root tightens a block at 46-71% of observations, rising
 with `v`. **It is one bit, not a count** -- a bare "no root production survives every block at once"
 flag reproduces the gain to +0.000 in 18/18, so the straddling window runs the *consistency check*
@@ -52,6 +53,29 @@ block word count and the bit. Unregistered: the sign on `k` **flips with `v`**
 The caveat I raised from this against the 51153821 prediction was **wrong**: sched/adaptive does
 fall with `v` (.212 -> .140, non-monotone, 3 seeds/v). R^2 in k is not decision quality -- the
 schedule can explain more of k at high `v` and still pick wrong at the sites that cost the most.
+**How far does that consistency reach? To the parent, not the root** (`rhm_k_depth.py`, array
+51214941, 18/18 cells at s=3 **L=3**, 17.0M observations per cell). Every result above was read at
+`L=2`, where a block's only parent *is* the root, so "consistent with the other blocks" and
+"consistent through the root" are the same sentence. `L=3` splits them: the parent is a 9x9 region,
+the root couples nine of those. **Near** (dead at the 9x9 parent) adds **median +0.017 R^2**
+(+.013..+.034, net +.016); **far** (dead at the root, *on top of* near) adds **+0.0005**
+(+.0002..+.0018), **37x smaller and 0/18 over the 0.02 bar**. Both cuts built post-probe to give the
+far bit its best shot agree: **+0.0029 among blocks the parent left alive** (2.54M observations
+where `dead_root` still splits ~80/20, so this is a null with range, not a null from a pinned
+feature) and **+0.0011 on the first schedule third**, 0/18 each. Graded-vs-bit replicates at the new
+depth: the exact BP posterior adds **+0.000 in 18/18**. Machinery checks pass -- `hp-hr` spans
+0.69..1.39 nats (near and far genuinely separate), parent and root disagree on 9.6-19.1% of
+observations in 18/18.
+> **The straddling window's consistency check is real but LOCAL: it reaches the site's own enclosing
+> block, and the `L=2` "+0.196 one bit" was that near coupling read at the one depth where near and
+> far coincide.**
+Registered 1 (near >= 0.02) is **refuted on the absolute bar, 5/18**, though near is 9.7% of the
+residual against an `L=3` baseline of 0.82 (`L=2`'s was 0.38). **Standing caveat, stated before the
+run:** 729 sites puts `P* = exp(Theta(n))` astronomically past `P <= 1000`, so the sampler is
+off-grammar early -- `dead_root` is 95/100/100% by schedule third and 95/97/98% at v=2/3/4. Item 7
+therefore bought almost no range and item 6 is the stronger of the two robustness cuts. The far
+coupling is being read in a deeply under-trained regime; that is a limit of this board, not an
+excuse for the null.
 
 ## E. Pooling costs the sampler, not the support, and not via phase count
 `gram_phase/gram_pooled = pool_cost x (eff ratio)`, `pool_cost` exact from enumeration (`rhm_straddle.py:165`). **50 cells: 3.51x = 1.06x (support) x 3.21x (sampler)**; the pooled sampler reaches 0.28 of its own ceiling, per-phase 0.89. The registered prediction that the ratio grows with phases mixed is **refuted**: s=2 (4 phases) 4.04x over 86 cells, s=3 (9 phases) 3.20x over 14.
@@ -81,8 +105,16 @@ schedule can explain more of k at high `v` and still pick wrong at the sites tha
    landed on that atom and the graded tail got 2 bins. `qbin` now bins the atom separately. The
    gain was +0.000 before and after, so that fixed the objection, not the answer.
    Deck re-rendered to 10 pages (BP page 6, traces now 7) and re-uploaded 2026-11-05.
-5. **In flight: array 51214941** (`scripts/rhm_k_depth.{py,sbatch}`, v=2/3/4, 3 seeds, P 300+1000,
-   `n_gen 64`, ~2.2 h per task). At `L=2` a block's only parent IS the root, so "consistent with the
+5. **Done (array 51214941, all 3 tasks COMPLETED exit 0; 2:11 / 2:07 / 2:28, MaxRSS 12.6/15.1/17.5 G
+   against 24 G), 18/18 cells.** Result and reading are in section D. Scores:
+   **1 near >=0.02 refuted 5/18** (median +0.0171, net +0.0157); **2 far >=0.02 null 0/18** (median
+   +0.0005); **3 graded adds nothing confirmed 18/18** (+0.0000); **6 far among parent-alive null
+   0/18** (+0.0029 over 2.54M obs); **7 far on the first third null 0/18** (+0.0011); checks **4**
+   (`hp-hr` 0.693..1.386, not 0) and **5** (parent/root disagree 9.6-19.1%) both pass 18/18.
+   Residual fractions: near 0.097, far 0.0030, far_pa 0.0089, far_early 0.0054. Deck re-rendered to
+   11 pages (depth page 7, traces 8) and uploaded 2026-11-05.
+   Design record, unchanged, since it was fixed before the run:
+   At `L=2` a block's only parent IS the root, so "consistent with the
    other blocks" and "consistent through the root" are one sentence; `L=3` splits them into a near
    (within the 9x9 parent) and a far (through the root) coupling. Registered items 1-7 are in the
    script docstring. **Machinery validated at `L=2`:** `hp-hr 0.0e+00` exactly, parent/root disagree
@@ -103,13 +135,10 @@ schedule can explain more of k at high `v` and still pick wrong at the sites tha
      deliberately not run -- near-OOM and it buys nothing.
    - `n_gen 64`, not `L=2`'s 512: `27x27` is 9x the sites, so `64 x 729` matches `512 x 81` on
      `n_obs`. Matching n_obs is the point; matching n_gen would be a 9x overspend.
-   **Smoke direction so far** (v2 P=300 `n_gen` 16, one cell, not the answer): near +0.019 net
-   +0.017 (resid frac 0.103); far marginal +0.002, item 6 +0.0083, item 7 +0.0047 -- all far under
-   0.02. Ordering near >> far at every cut. If that holds across 18 cells, registered 1 is
-   borderline-to-refuted on the absolute bar while clearing 10% of residual, and 2/6/7 are null:
-   the criterion's consistency check reaches its own parent, not the root.
-   Rows are written incrementally, so a timeout still leaves scorable partial JSONs in
-   `results/rhm_sampling/2026-11-05/kdepth_v{2,3,4}_m2_L3.json`.
+   The one smoke cell (v2 P=300 `n_gen` 16) predicted the full run closely -- near +0.019 net
+   +0.017, far +0.002, item 6 +0.0083, item 7 +0.0047, same ordering -- so the 18 cells tightened
+   the estimate rather than changing the verdict. Rows written incrementally; results in
+   `results/rhm_sampling/2026-11-05/kdepth_v{2,3,4}_m2_L3.json` (committed with `git add -f`).
 
 ## Discipline notes
 - Analysis runs in `srun -p sganguli -t 10 -c 2 --mem=4G`, never a login node; there `ml devel math

@@ -591,7 +591,7 @@ def page_depth(pdf, dp, num=7):
            'agree to 0.0e+00 and the near gain reproduces page 5\'s bit at +0.218, from code that\n'
            'shares nothing with it.\n\n'
            'At L=3 they separate, and the answer is near. The parent adds %+.3f (%.0f%% of the\n'
-           'residual); the root adds %+.3f on top of it, %dx smaller. The two cuts built to give\n'
+           'residual); the root adds %+.4f on top of it, %dx smaller. The two cuts built to give\n'
            'the far bit its best shot agree: %+.4f among blocks the parent left alive, %+.4f on\n'
            'the first third of the schedule.\n\n'
            'The honest caveat, measured before the run and not tuned away: at L=3 a grid is 729\n'
@@ -683,7 +683,7 @@ def page_traces(pdf, tr, n_show=5, num=6):
     pdf.savefig(fig); plt.close(fig)
 
 
-def page_conclusion(pdf, cells, ks_rows, kl_rows, rows, xb=(), bp=()):
+def page_conclusion(pdf, cells, ks_rows, kl_rows, rows, xb=(), bp=(), dp=()):
     keys = sorted(cells)
     fz, fn = floor_cells(rows)
     ratio = med([cells[k]['adapt']['success'] / cells[k]['fixed']['success']
@@ -735,7 +735,23 @@ def page_conclusion(pdf, cells, ks_rows, kl_rows, rows, xb=(), bp=()):
              'explains %.2f alone, nothing once conditioned'
              % med([r['r2_hleaf_alone'] for r in bp])),
         ]
-    y, step = 0.80, 0.046 if len(rows) <= 6 else 0.040 if len(rows) <= 8 else 0.034
+    if dp:
+        gn = [r['gain_near'] for r in dp]
+        gf = [r['gain_far'] for r in dp]
+        rows += [
+            ('    how FAR does that consistency reach (L=3)',
+             '%+.3f near' % med(gn),
+             '%d/%d cells' % (sum(1 for g in gn if g >= 0.02), len(gn)),
+             'its own enclosing 9x9 block, %.0f%% of residual'
+             % (100 * med([r['frac_resid_near'] for r in dp]))),
+            ('        the same bit through the ROOT, on top',
+             '%+.4f far' % med(gf),
+             '%d/%d cells' % (sum(1 for g in gf if g >= 0.02), len(gf)),
+             'null on 3 independent cuts; %.0fx under near'
+             % (med(gn) / max(1e-9, med(gf)))),
+        ]
+    y, step = 0.80, (0.046 if len(rows) <= 6 else 0.040 if len(rows) <= 8
+                     else 0.034 if len(rows) <= 10 else 0.030)
     fig.text(0.05, 0.855, '%-44s %-11s %-13s %s' % ('what was tried', 'effect', 'support', 'reading'),
              fontsize=12, family='monospace', weight='bold')
     for a, b, c, d in rows:
@@ -747,6 +763,11 @@ def page_conclusion(pdf, cells, ks_rows, kl_rows, rows, xb=(), bp=()):
             '  the site\'s own posterior entropy adds nothing once that bit is conditioned on.'
             if bp else
             'straddling a boundary can see. That is page 5.')
+    # L=2 cannot tell "the other blocks" from "the root" -- they are the same
+    # node there.  Once L=3 separates them the sentence has to name the parent,
+    # so the claim narrows rather than staying ambiguous.
+    reach = (' through the root' if not dp else
+             ' inside its own enclosing\n  9x9 region -- L=3 says the root itself adds nothing on top (page 7)')
     concl = (
         'Answer to "how are you setting the patch size over time?"\n\n'
         '  Not over time. The rule that works is "the largest window that matches any\n'
@@ -757,11 +778,14 @@ def page_conclusion(pdf, cells, ks_rows, kl_rows, rows, xb=(), bp=()):
         '  costs success in every cell measured, because a rejected window falls back on\n'
         '  a shorter one rather than on a better one.\n\n'
         '  What the site-dependence IS, is grammar: the block\'s own ambiguity, and then\n'
-        '  its consistency with the other blocks through the root -- which only a window\n'
+        '  its consistency with the other blocks%s -- which only a window\n'
         '  %s\n\n'
-        'Caveat: all of this is s=3, L=2 (9x9, rungs 5/7/9), v in {2,3,4}, m=2 mostly,\n'
-        'n_gen=4096. Deeper boards need k >= U1 = 2s^(L-1)-1, which is out of reach at L=4.'
-        % (100 * sa, tail))
+        'Caveat: the sweeps are s=3, L=2 (9x9, rungs 5/7/9), v in {2,3,4}, m=2 mostly,\n'
+        'n_gen=4096; the depth test is s=3, L=3 (27x27, rungs 5/11/17), n_gen=64 matched\n'
+        'on n_obs. Deeper boards need k >= U1 = 2s^(L-1)-1, out of reach at L=4. At L=3 the\n'
+        'sampler is far below P*, so the far bit is read where it is already violated: the\n'
+        'null is checked on 3 cuts (marginal, parent-alive, early), not asserted from one.'
+        % (100 * sa, reach, tail))
     # The table grows as rows are added, so size the conclusion block to the
     # space actually left rather than to a literal: the last line went off the
     # bottom of the page the first time two rows were appended.
@@ -857,7 +881,7 @@ def main():
             page_depth(pdf, dp_rows, num=6 + bool(xb_rows) + bool(bp_rows) - 1)
         page_traces(pdf, tr,
                     num=6 + bool(xb_rows) + bool(bp_rows) + bool(dp_rows) - 1)
-        page_conclusion(pdf, cells, ks_rows, kl_rows, s3, xb_rows, bp_rows)
+        page_conclusion(pdf, cells, ks_rows, kl_rows, s3, xb_rows, bp_rows, dp_rows)
     print('wrote %s (%.2f MB)' % (out, out.stat().st_size / 1e6))
 
 
