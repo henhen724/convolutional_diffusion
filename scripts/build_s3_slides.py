@@ -531,6 +531,88 @@ def page_bp(pdf, bp):
     pdf.savefig(fig); plt.close(fig)
 
 
+def page_depth(pdf, dp, num=7):
+    """How FAR does the consistency check reach, once near and far can differ?"""
+    fig = plt.figure(figsize=PAGE)
+    fig.suptitle('%d. At depth: the check reaches its own parent, not the root'
+                 % num, fontsize=20, weight='bold')
+    dp = sorted(dp, key=lambda r: (r['v'], r['rule_seed'], r['P']))
+    x = np.arange(len(dp))
+    gn = [r['gain_near'] for r in dp]
+    gf = [r['gain_far'] for r in dp]
+    # Items 6 and 7 are NaN wherever the far bit was pinned in that subset, so
+    # they are plotted as markers and summarised over the finite entries only.
+    g6 = np.array([r['gain_far_pa'] for r in dp], dtype=float)
+    g7 = np.array([r['gain_far_early'] for r in dp], dtype=float)
+    fin = lambda a: [t for t in a if np.isfinite(t)]
+
+    ax = fig.add_axes([0.075, 0.615, 0.40, 0.265])
+    ax.bar(x, gn, 0.78, color='#3b4cc0',
+           label='NEAR: within the 9x9 parent (median %+.3f)' % med(gn))
+    ax.plot(x, gf, '_', c='#b40426', ms=8, mew=2.2,
+            label='FAR: through the root, on top (%+.3f)' % med(gf))
+    ax.plot(x - 0.2, g6, '.', c='#111', ms=5,
+            label='FAR where the parent left it alive (%+.3f)' % med(fin(g6)))
+    ax.plot(x + 0.2, g7, '.', c='#777', ms=5,
+            label='FAR on the first schedule third (%+.3f)' % med(fin(g7)))
+    ax.axhline(0.02, ls='--', c='#111', lw=1.2)
+    ax.text(0.3, 0.021, 'registered threshold 0.02', fontsize=8, va='bottom')
+    ax.set_xticks([]); ax.set_xlabel('cell (v x rule seed x P)', fontsize=9)
+    ax.set_ylabel('$R^2$ added to (reveal count,\nn_words, $h_{local}$, dead)', fontsize=9.5)
+    ax.legend(frameon=False, fontsize=7.5, loc='upper center')
+    ax.set_ylim(-0.004, max(max(gn), 0.022) * 1.6)
+    ax.set_title('near clears 0.02 in %d/%d cells, far in %d/%d'
+                 % (sum(1 for g in gn if g >= 0.02), len(gn),
+                    sum(1 for g in gf if g >= 0.02), len(gf)), fontsize=12.5)
+
+    ax2 = fig.add_axes([0.585, 0.615, 0.365, 0.265])
+    dlc = [100 * r['frac_dead_local'] for r in dp]
+    dpc = [100 * r['frac_dead_parent'] for r in dp]
+    drc = [100 * r['frac_dead_root'] for r in dp]
+    ax2.plot(x, dlc, 'o-', ms=3.5, c='#3b4cc0', label='own 3x3 block (%.0f%%)' % med(dlc))
+    ax2.plot(x, dpc, 's-', ms=3.5, c='#777', label='+ the 9x9 parent (%.0f%%)' % med(dpc))
+    ax2.plot(x, drc, '^-', ms=3.5, c='#b40426', label='+ through the root (%.0f%%)' % med(drc))
+    ax2.set_xticks([]); ax2.set_xlabel('cell', fontsize=9)
+    ax2.set_ylabel('% of observations already dead', fontsize=9.5)
+    ax2.set_ylim(0, 108)
+    ax2.legend(frameon=False, fontsize=8, loc='lower right')
+    ax2.set_title('Why the far bit has so little room at L=3', fontsize=12.5)
+
+    th = np.array([r['frac_dead_root_by_third'] for r in dp], dtype=float)
+    pa = [100 * r['frac_parent_alive'] for r in dp]
+    # Per-v, not min/max over all cells: the sentence makes a claim about v and
+    # the spread across rule seeds and P would quietly stand in for it.
+    drv = lambda w: med([100 * r['frac_dead_root'] for r in dp if r['v'] == w]
+                        or [float('nan')])
+    txt = ('Every cross-block result so far was read at s=3, L=2 -- where a block\'s only parent\n'
+           'IS the root, so "consistent with the other blocks" and "consistent through the root"\n'
+           'are the same sentence. L=3 is the first board that splits them: the parent is a 9x9\n'
+           'region, the root couples nine of those. Free check first -- at L=2 the two messages\n'
+           'agree to 0.0e+00 and the near gain reproduces page 5\'s bit at +0.218, from code that\n'
+           'shares nothing with it.\n\n'
+           'At L=3 they separate, and the answer is near. The parent adds %+.3f (%.0f%% of the\n'
+           'residual); the root adds %+.3f on top of it, %dx smaller. The two cuts built to give\n'
+           'the far bit its best shot agree: %+.4f among blocks the parent left alive, %+.4f on\n'
+           'the first third of the schedule.\n\n'
+           'The honest caveat, measured before the run and not tuned away: at L=3 a grid is 729\n'
+           'sites, so P* = exp(Theta(n)) is astronomically past the P <= 1000 here. The sampler\n'
+           'goes off-grammar early -- dead at the root for %.0f%% of observations, already %.0f%% in\n'
+           'the FIRST third of the reveal schedule, and worse at larger v (%.0f%% at v=2, %.0f%% at\n'
+           'v=4), so no setting buys that bit range. Items 6 and 7 exist because of it: only\n'
+           '%.0f%% of observations have a parent that has not already killed them, and that is\n'
+           'where the root bit still splits. It adds nothing there either.\n\n'
+           'So the consistency check hshunt described is real but LOCAL: a straddling window\n'
+           'checks its own enclosing block, and the L=2 result was that near coupling all along,\n'
+           'read at the one depth where near and far coincide.'
+           % (med(gn), 100 * med([r['frac_resid_near'] for r in dp]), med(gf),
+              max(1, int(round(med(gn) / max(1e-9, med(gf))))),
+              med(fin(g6)), med(fin(g7)), med(drc),
+              100 * med(list(th[:, 0])), drv(2), drv(4), med(pa)))
+    fig.text(0.065, 0.545, txt, fontsize=9.6, va='top', family='monospace',
+             linespacing=1.32)
+    pdf.savefig(fig); plt.close(fig)
+
+
 def page_traces(pdf, tr, n_show=5, num=6):
     fig = plt.figure(figsize=PAGE)
     cfg = tr['config']
@@ -708,11 +790,13 @@ def main():
     kl_rows = load_glob(args.results, 'klocal_*.json')
     xb_rows = load_glob(args.crossblock, 'kxblock_*.json')
     bp_rows = load_glob(args.crossblock, 'kbp_*.json')
+    dp_rows = load_glob(args.crossblock, 'kdepth_*.json')
     nmin_rows = json.load(open(ROOT / args.results / 'nmin_smoke.json'))
     tr = json.load(open(ROOT / args.trace))
     print('%d s3 rows -> %d cells | %d ksched | %d klocal | %d nmin | %d xb | %d bp'
+          ' | %d depth'
           % (len(s3), len(cells), len(ks_rows), len(kl_rows), len(nmin_rows),
-             len(xb_rows), len(bp_rows)))
+             len(xb_rows), len(bp_rows), len(dp_rows)))
 
     from src.utils.random_hierarchy import RandomHierarchyModel2D
     rhm = RandomHierarchyModel2D(v=2, s=3, L=2, m=2, seed=1000)
@@ -769,7 +853,10 @@ def main():
             page_crossblock(pdf, xb_rows)
         if bp_rows:
             page_bp(pdf, bp_rows)
-        page_traces(pdf, tr, num=6 + bool(xb_rows) + bool(bp_rows) - 1)
+        if dp_rows:
+            page_depth(pdf, dp_rows, num=6 + bool(xb_rows) + bool(bp_rows) - 1)
+        page_traces(pdf, tr,
+                    num=6 + bool(xb_rows) + bool(bp_rows) + bool(dp_rows) - 1)
         page_conclusion(pdf, cells, ks_rows, kl_rows, s3, xb_rows, bp_rows)
     print('wrote %s (%.2f MB)' % (out, out.stat().st_size / 1e6))
 
