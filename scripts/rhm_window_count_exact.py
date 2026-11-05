@@ -90,6 +90,10 @@ def main():
     ap.add_argument('--m', type=int, nargs='+', default=[2])
     ap.add_argument('--k', type=int, nargs='+', default=[3, 5, 7])
     ap.add_argument('--rule_seeds', type=int, default=3)
+    ap.add_argument('--rule_seed_start', type=int, default=0,
+                   help='first rule seed; --rule_seeds stays the count. Matches '
+                        'rhm_sampling_complexity so the two stay in step when a '
+                        'published sweep is extended. Default 0 is unchanged.')
     ap.add_argument('--max_grids', type=float, default=2e7)
     ap.add_argument('--chunk', type=int, default=1 << 16)
     ap.add_argument('--out', type=str, required=True)
@@ -108,7 +112,7 @@ def main():
                 print(f'v={v} m={m} L={args.L}: {total:.3g} grids > --max_grids, skipped',
                       flush=True)
                 continue
-            for rs in range(args.rule_seeds):
+            for rs in range(args.rule_seed_start, args.rule_seed_start + args.rule_seeds):
                 model = RandomHierarchyModel2D(v=v, s=args.s, L=args.L, m=m, seed=1000 + rs)
                 for k in args.k:
                     t0 = time.time()

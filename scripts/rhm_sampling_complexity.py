@@ -112,6 +112,12 @@ def main():
     p.add_argument('--gen_batch', type=int, default=256)
     p.add_argument('--nsteps', type=int, default=None, help='default: 2 * number of sites')
     p.add_argument('--rule_seeds', type=int, default=3)
+    p.add_argument('--rule_seed_start', type=int, default=0,
+                   help='first rule seed; --rule_seeds is still the count, so '
+                        'start=3 count=5 runs 3..7. Lets a published sweep be '
+                        'extended with new grammars instead of re-run, since '
+                        'both the grammar seed (1000+rs) and the sampler seed '
+                        'depend only on rs. Default 0 reproduces old behaviour.')
     p.add_argument('--alpha_smooth', type=float, default=1e-3)
     p.add_argument('--schedule', choices=['linear', 'cosine'], default='linear')
     p.add_argument('--block_align', type=int, nargs='+', default=[1],
@@ -145,7 +151,7 @@ def main():
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     rows = []
-    for rs in range(args.rule_seeds):
+    for rs in range(args.rule_seed_start, args.rule_seed_start + args.rule_seeds):
         rhm = RandomHierarchyModel2D(v=args.v, s=args.s, L=args.L, m=args.m, seed=1000 + rs)
         # with --k_adapt the swept axis is the entropy floor, not the window
         axis = ([(None, h, hmd, nm) for hmd in args.h_mode for h in args.h_min
