@@ -49,10 +49,8 @@ schedule can explain more of k at high `v` and still pick wrong at the sites tha
 ## Next steps
 1. C+D deck + notebook **delivered** 2026-11-04 (`build_s3_slides.py`,
    `rhm_patch_size_2026-11-04.ipynb`, uploaded). Re-render both once 51143385 finishes its ladder.
-2. **Running (51175489)**: name the >=53% residual. `rhm_k_content.py` adds `n_words` = level-1
-   words still compatible with the site's own block. Smoke cell v2m2 P300: **+0.109 R^2 over nrev**
-   (registered threshold .05), block-fill control +0.017. Predicted: gain grows with `v`. My stated
-   *mechanism* is already refuted -- mean k rises with `n_words`, not falls (confounded with fill).
+2. **Running (51175489)**: name the >=53% residual. `rhm_k_content.py` adds `n_words` = level-1 words still compatible with the site's own block. Smoke cell v2m2 P300: **+0.109 R^2 over nrev** (registered threshold .05), block-fill control +0.017. Predicted: the gain grows with `v`.
+   My stated *mechanism* is already refuted -- mean k *rises* with `n_words` (8.50 -> 8.98), confounded with fill level, which is why the gain is scored over nrev rather than on its own.
 
 ## Discipline notes
 - Analysis runs in `srun -p sganguli -t 10 -c 2 --mem=4G`, never a login node; there `ml devel math
