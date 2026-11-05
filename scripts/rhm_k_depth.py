@@ -39,6 +39,51 @@ Registered before the L=3 run:
      disagree with each other at > 5%.  If they never disagree there is no far
      coupling to detect and 2 is vacuous rather than null.
 
+Added after the v=2 sizing probe, before any full run, because that probe
+showed 2 cannot be read on its own.  Deadness is monotone up the tree
+(dead_local => dead_parent => dead_root), and at L=3 the three rates came out
+30 / 78 / 96%.  dead_root at 96% is nearly constant, so the R^2 a binary
+feature can earn from it is mechanically small whether or not the criterion
+reads it -- 5 passes (they disagree at 18%) while 2 is still only half
+interpretable.  Where the far bit HAS range is among blocks their own parent
+has not already killed: there it splits about 82/18.
+
+  6. FAR where it has range: on the dead_parent == 0 subpopulation, dead_root
+     adds >= 0.02 R^2 over (nrev, n_words, h_local) -- a baseline with no
+     deadness column, since both deadness flags are constant on that subset --
+     net of a null shuffled within step.  No confident direction.  This is the
+     test that makes a null on 2 mean "the criterion does not read the far
+     coupling" rather than "the far bit had no variance to read".  Reported
+     alongside each gain as a fraction of the residual (1 - R^2_base) too: the
+     L=3 baseline is already 0.82, so an absolute 0.02 is a much stiffer bar
+     here than at L=2, where it was 0.38.
+
+Added after the v=4 probe, still before any full run.  Raising v makes the
+saturation WORSE, not better: dead_root 96% at v=2, 99% at v=4 (and
+parent-alive falls 22% -> 11%).  That kills the hope that a richer grammar
+buys the far bit room, and says what the saturation actually is.  At L=3 a
+grid is 27x27 = 729 sites, so P* = exp(Theta(n)) puts the grammatical regime
+astronomically beyond the P = 300..1000 run here; the sampler goes off-grammar
+early and the global constraint is violated almost everywhere.  The far
+coupling is thus being measured in the deeply under-trained regime, which is
+the honest caveat on any L=3 null and is reported with the result.
+
+There is one regime at L=3 where the far constraint is still physically live:
+early in the reverse schedule, when few sites are revealed and the grid is not
+yet doomed.  Deadness is a function of reveal count, so it has to start low.
+
+  7. FAR while it is still live: on observations in the first third of the
+     reveal schedule, dead_root adds >= 0.02 R^2 over (nrev, n_words,
+     h_local, dead_local), net of a null shuffled within step.  No confident
+     direction.  Reported with the dead_root rate in each third of the
+     schedule, so a reader can see whether the subset bought any range.
+
+6 and 7 are the same question -- does the far bit do anything where it is not
+pinned -- cut two independent ways (by the parent's verdict, by time).  Both
+were added to give the far coupling its best shot before any null is claimed,
+and both are labelled as post-probe additions rather than part of the original
+registration.  Neither changes how 1-3 are scored.
+
 The k ladder must contain a window wide enough to straddle a level-1 boundary
 (k > s^(L-1) = 9 at L=3), or 2 is answered by construction: a criterion that
 cannot see across a 9x9 region cannot use the far coupling.  --k_adapt is
@@ -251,6 +296,45 @@ def run_cell(args, rs, P, device):
     far_null = r2(ks, joint(c['nrev'], c['nw'], hl_bin, dl, dp, dr_shuf))
     graded = r2(ks, joint(c['nrev'], c['nw'], hl_bin, dl, dp, dr, hr_bin))
 
+    # Registered item 6.  Deadness is monotone up the tree, so on dead_parent
+    # == 0 both dl and dp are identically 0 and drop out of the baseline; dr is
+    # the only thing left varying, and it varies a lot (~82/18) where marginally
+    # it is pinned at 96%.  Guarded, because a cell where the root kills
+    # everything leaves dr constant here too and the contrast is undefined.
+    pa = dp == 0
+    n_pa, dr_pa = int(pa.sum()), dr[pa]
+    if n_pa > 1000 and 0 < float(dr_pa.mean()) < 1:
+        dr_pa_shuf = shuffle_within(dr_pa, c['step'][pa].astype(np.int64), rng)
+        base_pa = r2(ks[pa], joint(c['nrev'][pa], c['nw'][pa], hl_bin[pa]))
+        far_pa = r2(ks[pa], joint(c['nrev'][pa], c['nw'][pa], hl_bin[pa], dr_pa))
+        far_pa_null = r2(ks[pa], joint(c['nrev'][pa], c['nw'][pa], hl_bin[pa],
+                                       dr_pa_shuf))
+    else:
+        base_pa = far_pa = far_pa_null = float('nan')
+
+    # Registered item 7.  Deadness is driven by reveal count, so it must start
+    # low: the first third of the schedule is the only stretch at L=3 where the
+    # global constraint is still mostly satisfiable.  The thirds are fixed in
+    # advance by step index, never by the feature's own value -- selecting on
+    # dead_root to find somewhere dead_root varies would be circular.
+    nstep = int(c['step'].max()) + 1
+    third = c['step'] < max(1, nstep // 3)
+    thirds = [float(c['dr'][(c['step'] >= lo) & (c['step'] < hi)].mean())
+              if ((c['step'] >= lo) & (c['step'] < hi)).any() else float('nan')
+              for lo, hi in ((0, nstep // 3), (nstep // 3, 2 * nstep // 3),
+                             (2 * nstep // 3, nstep))]
+    n_e, dr_e = int(third.sum()), dr[third]
+    if n_e > 1000 and 0 < float(dr_e.mean()) < 1:
+        dr_e_shuf = shuffle_within(dr_e, c['step'][third].astype(np.int64), rng)
+        base_e = r2(ks[third], joint(c['nrev'][third], c['nw'][third],
+                                     hl_bin[third], dl[third]))
+        far_e = r2(ks[third], joint(c['nrev'][third], c['nw'][third],
+                                    hl_bin[third], dl[third], dr_e))
+        far_e_null = r2(ks[third], joint(c['nrev'][third], c['nw'][third],
+                                         hl_bin[third], dl[third], dr_e_shuf))
+    else:
+        base_e = far_e = far_e_null = float('nan')
+
     row = dict(v=args.v, s=args.s, L=args.L, m=args.m, rule_seed=rs, P=P,
                n_gen=args.n_gen, n_obs=int(ks.size), nbins=args.nbins,
                side=side, k_adapt=list(args.k_adapt), k_mean=float(ks.mean()),
@@ -265,7 +349,27 @@ def run_cell(args, rs, P, device):
                r2_far=far, r2_far_null=far_null, r2_graded=graded,
                gain_near=near - base, gain_near_net=near - near_null,
                gain_far=far - near, gain_far_net=far - far_null,
-               gain_graded=graded - far)
+               gain_graded=graded - far,
+               # Item 6 and the residual-fraction framing.
+               n_obs_parent_alive=n_pa,
+               frac_parent_alive=float(pa.mean()),
+               frac_dead_root_given_parent_alive=float(dr_pa.mean())
+               if n_pa else float('nan'),
+               r2_base_pa=base_pa, r2_far_pa=far_pa, r2_far_pa_null=far_pa_null,
+               gain_far_pa=far_pa - base_pa,
+               gain_far_pa_net=far_pa - far_pa_null,
+               frac_resid_near=(near - base) / max(1e-12, 1.0 - base),
+               frac_resid_far=(far - near) / max(1e-12, 1.0 - near),
+               frac_resid_far_pa=(far_pa - base_pa) / max(1e-12, 1.0 - base_pa),
+               # Item 7.
+               n_steps=nstep, n_obs_early=n_e,
+               frac_dead_root_by_third=thirds,
+               frac_dead_root_early=float(dr_e.mean()) if n_e else float('nan'),
+               r2_base_early=base_e, r2_far_early=far_e,
+               r2_far_early_null=far_e_null,
+               gain_far_early=far_e - base_e,
+               gain_far_early_net=far_e - far_e_null,
+               frac_resid_far_early=(far_e - base_e) / max(1e-12, 1.0 - base_e))
     print('v%d m%d rs%d P=%-5d L%d k %.3f | base %.3f +near %.3f (%+.3f net %+.3f)'
           ' +far %.3f (%+.3f net %+.3f) +graded %+.3f | dead l/p/r %.0f/%.0f/%.0f%%'
           ' disagree %.1f%% | hp-hr %.1e'
@@ -274,6 +378,19 @@ def run_cell(args, rs, P, device):
              graded - far, 100 * row['frac_dead_local'],
              100 * row['frac_dead_parent'], 100 * row['frac_dead_root'],
              100 * disagree, hp_hr_max))
+    print('   resid frac near %.3f far %.3f | parent-alive %.1f%% of obs, '
+          'dead_root %.1f%% there: +far %+.4f (net %+.4f, resid frac %.3f)'
+          % (row['frac_resid_near'], row['frac_resid_far'],
+             100 * row['frac_parent_alive'],
+             100 * row['frac_dead_root_given_parent_alive'],
+             row['gain_far_pa'], row['gain_far_pa_net'],
+             row['frac_resid_far_pa']))
+    print('   dead_root by schedule third %.0f/%.0f/%.0f%% | early third '
+          '%.1f%% dead, n=%d: +far %+.4f (net %+.4f, resid frac %.3f)'
+          % tuple([100 * t for t in thirds]
+                  + [100 * row['frac_dead_root_early'], n_e,
+                     row['gain_far_early'], row['gain_far_early_net'],
+                     row['frac_resid_far_early']]))
     sys.stdout.flush()
     return row
 
