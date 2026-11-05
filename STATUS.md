@@ -1,9 +1,9 @@
 # STATUS
 
-**RHM sampling complexity** is answered and delivered (was due 12:00 PT Fri 11/6). Running:
-**51143385** (s3 v2m3; all 12 fair-test cells landed, still extending their P ladder -- peaks can
-only rise) and **51175489** (`rhm_k_content.py`, next step 2). **MLS** is parked on hshunt's
-corrected layer-2 posterior (LOG.md, `mls_entropy_barrier_results.ipynb`).
+**RHM sampling complexity** is answered and delivered (due 12:00 PT Fri 11/6; re-reported
+2026-11-05 with the measurement record below). Both jobs **COMPLETED**: 51143385 (s3 P ladder,
+5:41:05) and 51175489 (`rhm_k_content.py`, 6:51). **MLS** is parked on hshunt's corrected
+layer-2 posterior (LOG.md, `mls_entropy_barrier_results.ipynb`).
 
 ## A. The answer
 `P` = training samples before the LS machine emits output **both novel and fully grammatical**.
@@ -47,10 +47,10 @@ schedule can explain more of k at high `v` and still pick wrong at the sites tha
 - **Blocked on hshunt (MLS):** the corrected layer-2 posterior. Nothing MLS runs until it lands.
 
 ## Next steps
-1. C+D deck + notebook **delivered** 2026-11-04 (`build_s3_slides.py`,
-   `rhm_patch_size_2026-11-04.ipynb`, uploaded). Re-render both once 51143385 finishes its ladder.
-2. **Running (51175489)**: name the >=53% residual. `rhm_k_content.py` adds `n_words` = level-1 words still compatible with the site's own block. Smoke cell v2m2 P300: **+0.109 R^2 over nrev** (registered threshold .05), block-fill control +0.017. Predicted: the gain grows with `v`.
-   My stated *mechanism* is already refuted -- mean k *rises* with `n_words` (8.50 -> 8.98), confounded with fill level, which is why the gain is scored over nrev rather than on its own.
+1. C+D deck + notebook **delivered** 2026-11-04 (`build_s3_slides.py`, `rhm_patch_size_2026-11-04.ipynb`, uploaded); re-render both on 51143385's now-completed ladder.
+2. **Done (51175489), 18/18 cells**: `n_words` (level-1 words still compatible with a site's own block) adds **median +0.107 R^2 over `nrev`**, clearing the registered .05 in **18/18**; block-fill control <= .006 everywhere. So the >=53% residual *is* grammatical ambiguity at the block scale, and it is not fill level wearing a grammar label.
+   But the registered "gain grows with `v`" is **refuted**: it falls monotonically, .125 / .102 / .096 at v=2/3/4 (6 cells each). The stated mechanism was already refuted by the smoke cell (mean k *rises* with `n_words`, confounded with fill), which is why the gain is scored over `nrev`.
+3. Next on the residual: take it **across block boundaries**, where `n_words` by construction says nothing -- that is also where hshunt's straddling-consistency question lives.
 
 ## Discipline notes
 - Analysis runs in `srun -p sganguli -t 10 -c 2 --mem=4G`, never a login node; there `ml devel math
