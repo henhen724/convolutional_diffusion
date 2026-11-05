@@ -1,7 +1,8 @@
 # STATUS
 
 **RHM sampling complexity** is answered and delivered (was due 12:00 PT Fri 11/6). Running:
-**51143385** (s3 v2m3, the last 2 of 12 fair-test cells). **MLS** is parked on hshunt's corrected
+**51143385** (s3 v2m3; all 12 fair-test cells have landed, it is still extending their P ladder --
+peaks can only rise). **MLS** is parked on hshunt's corrected
 layer-2 posterior (LOG.md, `mls_entropy_barrier_results.ipynb`).
 
 ## A. The answer
@@ -14,10 +15,10 @@ n=16: **1D 0.083 (k=U1=15), 2D 0.159 (25 cells), 1.92x apart.** Three explanatio
 
 ## C. hshunt's patch-size criterion: the length scale is everything, the floors are nothing
 s=2 is degenerate (`U1 = side - 1`, one odd rung in `[U1, side]` at every depth). s=3 L=2 (9x9,
-rungs 5/7/9) is the first fair test; **10 of 12 cells** (`rhm_adaptive_s3_score.py`):
-- **Adaptive beats the best fixed k 10/10**, median delta gram +0.207. Fixed optimum is `k=7`, not
-  `U1=5`, in 8/10. `k(t)` falls 9.0 -> 5.8..7.5, span growing with `v` (1.5 / 2.9 / 3.2).
-- **Both floors refuted.** Best `h_min` is 0 in 10/10, success monotone down in all 10 (median .181/.103/.101/.049 at h=0/.1/.5/1). The count rival `n_min` loses the same way (v2m2 rs0 P=300: .414 -> .148 as `n_min` 1 -> 10, gram -0.40 for novel +0.14). Both only ever move a site to a *shorter* window, which is less grammatical.
+rungs 5/7/9) is the first fair test; **all 12 cells** (`rhm_patch_size_2026-11-04.ipynb`):
+- **Adaptive beats the best fixed k 12/12**, median ratio 11.8x, median delta gram +0.208. Fixed
+  optimum is `k=7`, not `U1=5`, in 10/12. `k(t)` falls 9.0 -> 5.8..7.5, span growing with `v`.
+- **Both floors refuted.** Best `h_min` is 0 in 12/12 (success monotone down in all 10 scored before the last cells landed: median .181/.103/.101/.049 at h=0/.1/.5/1). The count rival `n_min` loses the same way (v2m2 rs0 P=300: .414 -> .148 as `n_min` 1 -> 10, gram -0.40 for novel +0.14). Both only ever move a site to a *shorter* window, which is less grammatical.
 > **"Largest window matching any training patch at all" is the whole rule; nothing added to it helps.**
 
 ## D. The patch size is per-site, not a schedule -- answers "how are you setting it over time?"
@@ -46,8 +47,8 @@ schedule can explain more of k at high `v` and still pick wrong at the sites tha
 - **Blocked on hshunt (MLS):** the corrected layer-2 posterior. Nothing MLS runs until it lands.
 
 ## Next steps
-1. Build the C+D deck + notebook (`build_s3_slides.py`, traces from `rhm_adaptive_trace.py
-   --k_fixed`, tokenization page) and upload. Rebuild once 51143385 adds the last 2 cells.
+1. C+D deck + notebook **delivered** 2026-11-04 (`build_s3_slides.py`,
+   `rhm_patch_size_2026-11-04.ipynb`, uploaded). Re-render both once 51143385 finishes its ladder.
 2. Name the >=53% residual in D. Reveal *count* caps at .47, so the rest is *which* tokens: next
    regressor is the number of level-1 words still compatible with the window's revealed sites
    (grammar-side, computable from the partial grid, varies at fixed count). Extend `KRecorder`.
