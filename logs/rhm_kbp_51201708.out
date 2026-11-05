@@ -1,0 +1,26 @@
+The following modules were not unloaded:
+  (Use "module --force purge" to unload all):
+
+  1) math   2) devel
+v2 m2 rs0 P=300   k 8.587 | base 0.328 +hloc 0.328 +dead 0.523 +hroot 0.523 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 7 vals 70 zero 80%, dead 19.7% (agree 1.0000) | hleaf alone 0.331 full +0.000 net -0.000 (bins 7)
+v2 m2 rs0 P=1000  k 8.669 | base 0.295 +hloc 0.296 +dead 0.539 +hroot 0.539 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 7 vals 70 zero 80%, dead 19.4% (agree 1.0000) | hleaf alone 0.356 full +0.000 net -0.000 (bins 7)
+v2 m2 rs1 P=300   k 8.260 | base 0.385 +hloc 0.386 +dead 0.579 +hroot 0.579 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 8 vals 69 zero 78%, dead 32.1% (agree 1.0000) | hleaf alone 0.383 full +0.000 net -0.000 (bins 7)
+v2 m2 rs1 P=1000  k 8.426 | base 0.330 +hloc 0.332 +dead 0.567 +hroot 0.567 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 8 vals 68 zero 78%, dead 29.4% (agree 1.0000) | hleaf alone 0.384 full +0.000 net -0.000 (bins 7)
+v2 m2 rs2 P=300   k 8.535 | base 0.391 +hloc 0.391 +dead 0.513 +hroot 0.513 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 6 vals 57 zero 65%, dead 23.5% (agree 1.0000) | hleaf alone 0.309 full +0.000 net -0.000 (bins 6)
+v2 m2 rs2 P=1000  k 8.666 | base 0.331 +hloc 0.331 +dead 0.496 +hroot 0.496 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 6 vals 57 zero 65%, dead 21.8% (agree 1.0000) | hleaf alone 0.303 full +0.000 net -0.000 (bins 6)
+wrote /scratch/users/hshunt/convolutional_diffusion/results/rhm_sampling/2026-11-05/kbp_v2_m2.json
+v3 m2 rs0 P=300   k 7.687 | base 0.439 +hloc 0.440 +dead 0.683 +hroot 0.683 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 9 vals 173 zero 79%, dead 48.8% (agree 1.0000) | hleaf alone 0.450 full +0.000 net -0.000 (bins 7)
+v3 m2 rs0 P=1000  k 7.851 | base 0.404 +hloc 0.404 +dead 0.699 +hroot 0.699 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 9 vals 180 zero 80%, dead 45.6% (agree 1.0000) | hleaf alone 0.470 full +0.000 net -0.000 (bins 7)
+v3 m2 rs1 P=300   k 7.587 | base 0.511 +hloc 0.511 +dead 0.627 +hroot 0.627 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 9 vals 131 zero 63%, dead 56.5% (agree 1.0000) | hleaf alone 0.392 full +0.000 net -0.000 (bins 6)
+v3 m2 rs1 P=1000  k 7.848 | base 0.466 +hloc 0.466 +dead 0.605 +hroot 0.605 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 9 vals 131 zero 67%, dead 52.3% (agree 1.0000) | hleaf alone 0.360 full +0.000 net -0.000 (bins 5)
+v3 m2 rs2 P=300   k 7.358 | base 0.471 +hloc 0.471 +dead 0.697 +hroot 0.697 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 8 vals 33 zero 79%, dead 58.7% (agree 1.0000) | hleaf alone 0.451 full +0.000 net -0.000 (bins 6)
+v3 m2 rs2 P=1000  k 7.495 | base 0.438 +hloc 0.439 +dead 0.702 +hroot 0.702 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 8 vals 33 zero 79%, dead 56.6% (agree 1.0000) | hleaf alone 0.460 full +0.000 net -0.000 (bins 6)
+wrote /scratch/users/hshunt/convolutional_diffusion/results/rhm_sampling/2026-11-05/kbp_v3_m2.json
+v4 m2 rs0 P=300   k 7.054 | base 0.541 +hloc 0.542 +dead 0.707 +hroot 0.707 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 9 vals 111 zero 74%, dead 65.9% (agree 1.0000) | hleaf alone 0.435 full +0.000 net -0.000 (bins 6)
+v4 m2 rs0 P=1000  k 7.253 | base 0.489 +hloc 0.490 +dead 0.708 +hroot 0.708 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 9 vals 118 zero 75%, dead 63.2% (agree 1.0000) | hleaf alone 0.443 full +0.000 net -0.000 (bins 6)
+v4 m2 rs1 P=300   k 7.348 | base 0.506 +hloc 0.507 +dead 0.674 +hroot 0.674 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 9 vals 213 zero 69%, dead 61.3% (agree 1.0000) | hleaf alone 0.424 full +0.000 net +0.000 (bins 7)
+v4 m2 rs1 P=1000  k 7.450 | base 0.478 +hloc 0.479 +dead 0.678 +hroot 0.678 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 9 vals 218 zero 71%, dead 58.5% (agree 1.0000) | hleaf alone 0.438 full +0.000 net -0.000 (bins 7)
+v4 m2 rs2 P=300   k 7.248 | base 0.501 +hloc 0.501 +dead 0.670 +hroot 0.670 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 9 vals 169 zero 74%, dead 62.4% (agree 1.0000) | hleaf alone 0.414 full +0.000 net -0.000 (bins 7)
+v4 m2 rs2 P=1000  k 7.402 | base 0.470 +hloc 0.470 +dead 0.668 +hroot 0.668 (GAIN +0.000, net -0.000) | count path +0.000 | hr bins 9 vals 165 zero 76%, dead 60.7% (agree 1.0000) | hleaf alone 0.418 full +0.000 net -0.000 (bins 7)
+wrote /scratch/users/hshunt/convolutional_diffusion/results/rhm_sampling/2026-11-05/kbp_v4_m2.json
+done

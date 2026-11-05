@@ -33,7 +33,21 @@ constrains it through the root* adds **median +0.196 R^2** (+.116..+.294) net of
 of +0.000; within-block control <=+0.002; root tightens a block at 46-71% of observations, rising
 with `v`. **It is one bit, not a count** -- a bare "no root production survives every block at once"
 flag reproduces the gain to +0.000 in 18/18, so the straddling window runs the *consistency check*
-hshunt described rather than accumulating evidence. Unregistered: the sign on `k` **flips with `v`**
+hshunt described rather than accumulating evidence.
+**The bit survives the exact posterior** (`rhm_k_bp.py`, 51201708, 18/18): redone with
+`belief_propagation` instead of survivor counts, the graded `h_root = H(block symbol | all observed
+leaves)` adds **+0.000** over (nrev, n_words, h_local, dead) in every cell, net −0.000 -- while the
+bit itself re-earns **+0.197 [+0.116..+0.294]**, reproducing the count path's +0.196 to three
+decimals from an independent computation. BP deadness equals the enumeration's `n_sym_root == 0` at
+**1.0000 in 18/18**. The feature had plenty to grade: 6-9 bins over 33-218 distinct values, with the
+zero atom (root pins the symbol) at 63-80% of alive observations.
+> **The Bayes-optimal posterior adds nothing over the one consistency bit** -- a much harder
+> statement than the coarse count adding nothing, and the direction I flagged as the stronger one.
+Unregistered diagnostic, same pass: `h_leaf`, the exact posterior entropy at the *site's own token*
+-- the quantity hshunt named for the criterion -- explains **0.416 [0.303..0.470]** of `k` alone but
+also adds **+0.000** over the baseline, 18/18. So the criterion's behaviour is *consistent with*
+tracking posterior entropy while that entropy carries no information independent of reveal count,
+block word count and the bit. Unregistered: the sign on `k` **flips with `v`**
 (root-tightened site gets a shorter window at v=2, 6/6; longer at v=4, 6/6). No mechanism claimed.
 The caveat I raised from this against the 51153821 prediction was **wrong**: sched/adaptive does
 fall with `v` (.212 -> .140, non-monotone, 3 seeds/v). R^2 in k is not decision quality -- the
@@ -49,14 +63,22 @@ schedule can explain more of k at high `v` and still pick wrong at the sites tha
 - **Blocked on hshunt (MLS):** the corrected layer-2 posterior. Nothing MLS runs until it lands.
 
 ## Next steps
-1. C+D deck + notebook **delivered** 2026-11-04 (`build_s3_slides.py`, `rhm_patch_size_2026-11-04.ipynb`, uploaded); re-render both on 51143385's now-completed ladder.
+1. **Done.** C+D deck re-rendered on 51143385's completed ladder and re-uploaded 2026-11-05
+   (9 pages, cross-block page added). Counts are now derived from the plotted rows, not literals.
+   `rhm_patch_size_2026-11-04.ipynb` still shows the pre-completion numbers -- re-run it.
 2. **Done (51175489), 18/18 cells**: `n_words` (level-1 words still compatible with a site's own block) adds **median +0.107 R^2 over `nrev`**, clearing the registered .05 in **18/18**; block-fill control <= .006 everywhere. So the >=53% residual *is* grammatical ambiguity at the block scale, and it is not fill level wearing a grammar label.
    But the registered "gain grows with `v`" is **refuted**: it falls monotonically, .125 / .102 / .096 at v=2/3/4 (6 cells each). The stated mechanism was already refuted by the smoke cell (mean k *rises* with `n_words`, confounded with fill), which is why the gain is scored over `nrev`.
 3. **Done (51197626 / 51198000 / 51198269), 18/18**: cross-block result in D. 51198269 adds only
    the `frac_multi` substrate column that licenses the "one bit" wording.
-4. Refinement: redo `n_sym_root` as a `belief_propagation` posterior entropy, not a survivor count.
-   BP is exact on this tree, and a hard count degenerating to one bit is exactly what an entropy
-   would resolve -- it says whether the criterion tracks anything softer underneath.
+4. **Done (51201708), 18/18**: BP refinement in D. Registered 1 (`h_root` adds >=0.02) is
+   **refuted 0/18** -- the null I had flagged as the stronger outcome; 2 (BP vs enumeration >99%)
+   holds at **1.0000**; 3 (substrate) holds at 6-9 bins. Smoke testing caught 3 failing for the
+   wrong reason first: `h_root` is exactly 0 on 71-80% of alive sites, so plain quantile cuts all
+   landed on that atom and the graded tail got 2 bins. `qbin` now bins the atom separately. The
+   gain was +0.000 before and after, so that fixed the objection, not the answer.
+5. Open, cheapest next: the cross-block bit is measured only at `s=3 L=2`, where one root production
+   couples 9 blocks. Whether it stays one bit when the root is further away (`L=3`) is untested, and
+   is the first place a graded version could appear.
 
 ## Discipline notes
 - Analysis runs in `srun -p sganguli -t 10 -c 2 --mem=4G`, never a login node; there `ml devel math
