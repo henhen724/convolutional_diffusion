@@ -52,7 +52,8 @@ class TracingAdaptive(AdaptiveWindowDiscreteScoreMachine):
                 continue
             h = (-(post.clamp_min(1e-12) * post.clamp_min(1e-12).log()).sum(1)
                  if self.h_mode == 'token' else h_match)
-            ok = masked & (n_match > 0) & (h >= self.h_min)
+            enough = (n_match > 0) if self.n_min <= 1 else (n_match >= self.n_min)
+            ok = masked & enough & (h >= self.h_min)
             chosen = torch.where(ok[:, None], post, chosen)
             kmap = torch.where(ok, torch.full_like(kmap, float(k)), kmap)
         p = chosen.clamp_min(1e-12)
@@ -78,6 +79,8 @@ def main():
     ap.add_argument('--k_adapt', type=int, nargs='+', default=[3, 5])
     ap.add_argument('--h_min', type=float, default=0.1)
     ap.add_argument('--h_mode', default='match')
+    ap.add_argument('--n_min', type=float, default=1.0,
+                    help='minimum matching training occurrences, the count rival to --h_min')
     ap.add_argument('--n_gen', type=int, default=64)
     ap.add_argument('--k_fixed', type=int, default=None,
                     help='make the control a fixed-window machine at this k instead of the '
@@ -97,12 +100,13 @@ def main():
     train, _ = rhm.sample(args.P, seed=seed)
 
     out = {}
-    arms = (('floor', args.h_min, args.k_adapt),
-            ('control', 0.0,
+    arms = (('floor', args.h_min, args.n_min, args.k_adapt),
+            ('control', 0.0, 1.0,
              [args.k_fixed] if args.k_fixed is not None else args.k_adapt))
-    for tag, h_min, ksz in arms:
+    for tag, h_min, n_min, ksz in arms:
         mach = TracingAdaptive(train, vocab_size=rhm.v, kernel_sizes=ksz,
-                               h_min=h_min, h_mode=args.h_mode, alpha_smooth=1e-3,
+                               h_min=h_min, h_mode=args.h_mode, n_min=n_min,
+                               alpha_smooth=1e-3,
                                device=device, block_align=1, pad_mode='outside')
         sampler = ScheduledDiscreteScoreMachine(
             mach, vocab_size=rhm.v, grid_size=rhm.grid_size,
@@ -137,16 +141,18 @@ def main():
             traj.append(dict(sample=b, reveals=seq,
                              grid=xs[-1][b].astype(int).tolist(),
                              novel=bool(novel[b]), grammatical=bool(gram[b])))
-        out[tag] = dict(h_min=h_min, kernel_sizes=list(ksz), success=float(res['success']),
+        out[tag] = dict(h_min=h_min, n_min=n_min, kernel_sizes=list(ksz),
+                        success=float(res['success']),
                         grammatical=float(res['grammatical']),
                         novel=float(novel.mean()), traj=traj)
-        print('%-8s k=%-12s h_min=%.1f  succ %.4f  gram %.4f  novel %.4f  mean k %.3f'
-              % (tag, ksz, h_min, res['success'], res['grammatical'], novel.mean(),
+        print('%-8s k=%-12s h_min=%.1f n>=%g  succ %.4f  gram %.4f  novel %.4f  mean k %.3f'
+              % (tag, ksz, h_min, n_min, res['success'], res['grammatical'], novel.mean(),
                  float(np.mean([kb for _, kb in mach.trace]))))
 
     out['config'] = dict(v=args.v, s=args.s, L=args.L, m=args.m,
                          rule_seed=args.rule_seed, P=args.P, seed=seed,
                          k_adapt=args.k_adapt, k_fixed=args.k_fixed, h_mode=args.h_mode,
+                         n_min=args.n_min,
                          n_sites=rhm.grid_size ** 2,
                          train_grids=train.astype(int).tolist())
     o = ROOT / args.out

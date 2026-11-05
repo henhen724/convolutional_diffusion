@@ -72,3 +72,21 @@ holds the live state.
   before the check, `rhm_sampling_complexity.py:64`), which is what OOM-killed 51141861 on a rung it
   had just logged as SKIPPED; and under `srun`, `ml devel math python/3.12.1` provides `python3`
   only, leaving bare `python` at 2.7.5.
+- Both floors on the window criterion are now refuted, not just the entropy one. The count rival
+  `n_min` (a floor on matching *occurrences*, where `h_min` floors their *diversity*) loses the same
+  way: at v2m2 rs0 P=300 success falls .414 -> .379 -> .333 -> .258 -> .148 as `n_min` goes 1 -> 10,
+  buying novelty +0.14 at a cost of grammaticality -0.40. One mechanism covers both: a rejection can
+  only send a site to a *shorter* window, and shorter is less grammatical. `n_min=1` reproduces the
+  committed numbers bit for bit (0.414/0.580), so the default path is untouched.
+- The window criterion's win is per-site, not a k(t) schedule -- this answers hshunt's "how are you
+  setting the patch size over time?". `rhm_k_schedule.py` runs four matched arms and derives the
+  control schedule from the adaptive arm's own trace, so it cannot be rigged. Capping the criterion
+  to that schedule costs nothing (.4412 vs .4363), but handing the same curve to every site
+  uniformly gives .0925 at an essentially identical mean k (8.309 vs 8.297). Time cannot set the
+  patch size; the site does. First attempt had the breakpoints recording each k's upper rather than
+  lower edge, which capped the run one rung early from the second call on and made the control
+  spuriously bad (mean k 5.94); caught because the cap arm's mean k did not match its own trace.
+- Pooling's cost does not scale with phases mixed. Registered prediction was that the per-phase /
+  pooled ratio grows from s=2 (4 phases) to s=3 (9), and it fell: 4.04x over 86 cells vs 3.20x over
+  14. With 50 exact-support cells the decomposition is 3.51x = 1.06x support x 3.21x sampler, close
+  to the 3.46 = 1.05 x 3.18 it showed at 10 cells. So the cost is per-site weight error.

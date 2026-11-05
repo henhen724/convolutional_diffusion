@@ -448,8 +448,34 @@ class AdaptiveWindowDiscreteScoreMachine(nn.Module):
         proper: it goes to zero exactly when one training patch explains the
         window, whatever the token posterior looks like.
 
+    ``n_min`` is the rival criterion, and it is not a reparametrization of
+    ``h_min``. ``n_match`` is the total number of matching training *occurrences*
+    and ``h_match`` their *diversity*, so a window matched by fifty copies of one
+    patch has ``n_match = 50`` and ``h_match = 0``. Both entropy floors throw
+    that window away, and the ``'token'`` note above says why that is the wrong
+    instinct: many matches that all agree is generalization, not memorization.
+    A floor on the count keeps it and instead rejects the window whose single
+    accidental match pins the continuation to one training grid. The s=3 sweep
+    found the best ``h_min`` to be 0 in 8 of 8 cells -- that is ``n_min = 1``,
+    the weakest member of the family -- which is what makes ``n_min > 1`` the
+    experiment that has not been run. Default 1 reproduces ``n_match > 0``
+    exactly, so every earlier result is unchanged.
+
     ``trace`` records ``(masked fraction, mean chosen k)`` per call, which is
     the k(t) schedule the criterion induces rather than one imposed by hand.
+
+    ``k_cap_schedule`` and ``require_support`` exist to ask what that induced
+    schedule is worth on its own. The criterion does two separable things: it
+    shrinks the window as the grid fills, and it picks a *different* window at
+    different sites of the same grid. Give ``k_cap_schedule`` a list of
+    ``(masked_fraction, k)`` breakpoints and no kernel above the cap is
+    considered; set ``require_support = False`` on top of that and the support
+    test never runs, so every masked site uses the capped ``k`` whether or not a
+    training patch matches it. The three settings are the three arms: no cap is
+    the criterion, cap alone is the criterion restricted to the schedule it
+    induced, and cap without support is the bare schedule. Feeding back the
+    measured ``trace`` as the cap makes the control exactly matched rather than
+    a schedule chosen by hand to lose.
     """
 
     def __init__(
@@ -459,6 +485,9 @@ class AdaptiveWindowDiscreteScoreMachine(nn.Module):
         kernel_sizes,
         h_min: float,
         h_mode: str = 'match',
+        n_min: float = 1.0,
+        k_cap_schedule=None,
+        require_support: bool = True,
         mask_token: Optional[int] = None,
         alpha_smooth: float = 1.0,
         device=None,
@@ -473,6 +502,13 @@ class AdaptiveWindowDiscreteScoreMachine(nn.Module):
         if h_mode not in ('token', 'match'):
             raise ValueError(f"h_mode must be 'token' or 'match', got {h_mode!r}")
         self.h_mode = h_mode
+        self.n_min = float(n_min)
+        # sorted by threshold descending, so the cap is the k of the first
+        # entry whose threshold the current masked fraction has fallen to
+        self.k_cap_schedule = (None if k_cap_schedule is None else
+                               sorted(((float(f), int(k)) for f, k in k_cap_schedule),
+                                      key=lambda fk: -fk[0]))
+        self.require_support = bool(require_support)
         self.mask_token = vocab_size if mask_token is None else mask_token
         self.machines = nn.ModuleList([
             PatchCountDiscreteScoreMachine(
@@ -485,11 +521,25 @@ class AdaptiveWindowDiscreteScoreMachine(nn.Module):
         self.n_patches_total = sum(mm.n_patches_total for mm in self.machines)
         self.trace = []
 
+    def cap_at(self, masked_fraction: float) -> int:
+        """Largest kernel the schedule allows at this masked fraction."""
+        if self.k_cap_schedule is None:
+            return self.kernel_sizes[-1]
+        for f, k in self.k_cap_schedule:
+            if masked_fraction >= f:
+                return k
+        return self.k_cap_schedule[-1][1]
+
     def forward(self, t, xt: torch.Tensor, label=None, device=None):
         masked = (xt.to(self.machines[0].device) == self.mask_token)
+        cap = self.cap_at(float(masked.float().mean()))
         chosen = None
         kmap = None
         for k, mach in zip(self.kernel_sizes, self.machines):
+            # kernel_sizes is ascending, so the first is always evaluated and
+            # the cap only ever removes larger candidates
+            if chosen is not None and k > cap:
+                break
             post, n_match, h_match = mach(t, xt, return_match=True)
             if chosen is None:
                 chosen = post
@@ -499,7 +549,16 @@ class AdaptiveWindowDiscreteScoreMachine(nn.Module):
                 h = -(post.clamp_min(1e-12) * post.clamp_min(1e-12).log()).sum(1)
             else:
                 h = h_match
-            ok = masked & (n_match > 0) & (h >= self.h_min)
+            # n_min <= 1 goes through the strict-positive test rather than
+            # >= 1.0, so the default is bit-for-bit the old behaviour whatever
+            # the float weights do
+            enough = (n_match > 0) if self.n_min <= 1 else (n_match >= self.n_min)
+            # with the support test off the capped kernel is taken at every
+            # masked site, matched or not: that is the bare schedule, and a
+            # site it cannot match falls back on smoothing rather than on a
+            # shorter window
+            ok = (masked & enough & (h >= self.h_min) if self.require_support
+                  else masked)
             chosen = torch.where(ok[:, None], post, chosen)
             kmap = torch.where(ok, torch.full_like(kmap, float(k)), kmap)
         if masked.any():

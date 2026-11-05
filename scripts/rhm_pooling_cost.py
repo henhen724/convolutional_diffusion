@@ -95,7 +95,7 @@ def main():
     args = ap.parse_args()
 
     runs = [r for r in load_runs(DIRS)
-            if r.get('pad_mode') == args.pad_mode and r.get('block_align') in (1, 2)]
+            if r.get('pad_mode') == args.pad_mode and r.get('block_align') in (1, 2, 3)]
     by = defaultdict(dict)
     for r in runs:
         by[tuple(r[c] for c in CELL)].setdefault(r['block_align'], []).append(r)
@@ -163,6 +163,32 @@ def main():
     print('    per-phase %.4f  (ceil %.4f, gram %.4f)'
           % (med([r['eff_phase'] for r in have]), med([r['ceil_aligned'] for r in have]),
              med([r['gram_phase'] for r in have])))
+
+    # What does the sampler term scale with? Pooling mixes s^2 phases into one
+    # table -- 4 at s=2, 9 at s=3 -- so if the cost is phase confusion it grows
+    # with s, and if it is per-site weight error it does not. Phase-aware means
+    # block_align = s, so this reads ba = s against ba = 1 at every cell that
+    # has both, which covers s=2 and s=3 in one pass. No exact support exists at
+    # s=3 (v^81 grids), so this is the measured ratio only.
+    print('\n=== does the cost grow with the number of phases mixed? ===')
+    print('   s  phases | cells | median gram ratio | median succ ratio')
+    for s in sorted({k[1] for k in by}):
+        ks = [k for k in by if k[1] == s and 1 in by[k] and s in by[k]]
+        rows = []
+        for key in ks:
+            Ps = set(r['P'] for r in by[key][1]) & set(r['P'] for r in by[key][s])
+            if not Ps:
+                continue
+            g = {ba: max((r for r in by[key][ba] if r['P'] in Ps),
+                         key=lambda r: r['grammatical'])['grammatical'] for ba in (1, s)}
+            p = {ba: max((r for r in by[key][ba] if r['P'] in Ps),
+                         key=lambda r: r['success'])['success'] for ba in (1, s)}
+            if g[1] and p[1]:
+                rows.append((g[s] / g[1], p[s] / p[1]))
+        if rows:
+            print('  %2d  %6d | %5d | %17.2fx | %16.2fx'
+                  % (s, s * s, len(rows), med([r[0] for r in rows]),
+                     med([r[1] for r in rows])))
 
     if args.out:
         o = ROOT / args.out

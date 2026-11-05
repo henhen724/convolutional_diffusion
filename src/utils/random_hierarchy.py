@@ -103,6 +103,138 @@ class RandomHierarchyModel2D:
             return grid, root, levels
         return grid, root
 
+    def belief_propagation(self, xt: Array, mask_token: Optional[int] = None):
+        """Exact posterior marginals at every level, via belief propagation.
+
+        This is the same exact-inference method used for Figs. 5/7 of
+        Sclocchi, Favero & Wyart (PNAS 2025) and Fig. 2 of Sclocchi, Favero,
+        Levi & Wyart (ICLR 2025): since the generative model is a tree (each
+        node's ``s x s`` block of children is drawn from one of its ``m``
+        known, fixed candidate words, independent of everything outside its
+        own subtree given its own symbol), belief propagation is *exact*,
+        not an approximation -- there are no loops to break sum-product's
+        exactness.
+
+        Parameters
+        ----------
+        xt : (N, s**L, s**L) int array of observed leaf tokens, with sites
+            equal to ``mask_token`` treated as unobserved (erased).
+        mask_token : sentinel marking an unobserved site; defaults to ``v``.
+
+        Returns
+        -------
+        marginals : list of (N, s**l, s**l, v) float arrays, l = 0..L
+            (root..leaf), the exact posterior P(z_l = a | observed leaves)
+            for every node.
+        """
+        if mask_token is None:
+            mask_token = self.v
+        xt = np.asarray(xt)
+        n = xt.shape[0]
+        v, s, L, m = self.v, self.s, self.L, self.m
+
+        observed = xt != mask_token
+        safe_xt = np.where(observed, xt, 0)
+        leaf_up = np.eye(v, dtype=np.float64)[safe_xt]  # (n, gs, gs, v): one-hot if observed
+        leaf_up[~observed] = 1.0 / v  # uniform likelihood if masked
+
+        up = self._bp_upward(leaf_up)
+        down = self._bp_downward(up)
+
+        marginals = []
+        for l in range(L + 1):
+            combined = up[l] * down[l]
+            combined /= combined.sum(axis=-1, keepdims=True).clip(min=1e-300)
+            marginals.append(combined)
+        return marginals
+
+    def _bp_upward(self, leaf_up: Array):
+        """up[l][n, i, j, a] ~ P(observed leaves under this subtree | z_l = a), normalized."""
+        v, s, L, m = self.v, self.s, self.L, self.m
+        up = [None] * (L + 1)
+        up[L] = leaf_up
+        current = leaf_up
+        for l in range(L - 1, -1, -1):
+            rule = self.rules[l]  # (v, m, s, s)
+            n, h, w, _ = current.shape
+            nb = h // s
+            # (n, nb, nb, s, s, v): group leaf/child grid into this level's s x s blocks
+            blocks = current.reshape(n, nb, s, nb, s, v).transpose(0, 1, 3, 2, 4, 5)
+            new_up = np.zeros((n, nb, nb, v), dtype=np.float64)
+            for a in range(v):
+                word_probs = np.empty((m, n, nb, nb), dtype=np.float64)
+                for wi in range(m):
+                    prod = np.ones((n, nb, nb), dtype=np.float64)
+                    for di in range(s):
+                        for dj in range(s):
+                            prod = prod * blocks[:, :, :, di, dj, rule[a, wi, di, dj]]
+                    word_probs[wi] = prod
+                new_up[:, :, :, a] = word_probs.mean(axis=0)
+            new_up /= new_up.sum(axis=-1, keepdims=True).clip(min=1e-300)
+            up[l] = new_up
+            current = new_up
+        return up
+
+    def _bp_downward(self, up):
+        """down[l][n, i, j, a] ~ P(z_l = a | everything outside this node's subtree)."""
+        v, s, L, m = self.v, self.s, self.L, self.m
+        n = up[0].shape[0]
+        down = [None] * (L + 1)
+        down[0] = np.full((n, 1, 1, v), 1.0 / v)  # root prior is uniform by construction
+        for l in range(L):
+            rule = self.rules[l]  # (v, m, s, s)
+            parent_down = down[l]  # (n, nb, nb, v)
+            nb = parent_down.shape[1]
+            # children's own upward messages, grouped into this level's s x s blocks
+            blocks_up = up[l + 1].reshape(n, nb, s, nb, s, v).transpose(0, 1, 3, 2, 4, 5)
+            new_blocks = np.zeros((n, nb, nb, s, s, v), dtype=np.float64)
+            for a in range(v):
+                weight = parent_down[:, :, :, a] * (1.0 / m)  # (n, nb, nb)
+                for wi in range(m):
+                    for di_t in range(s):
+                        for dj_t in range(s):
+                            # leave-one-out product over siblings (excluding the target child)
+                            loo = np.ones((n, nb, nb), dtype=np.float64)
+                            for di in range(s):
+                                for dj in range(s):
+                                    if (di, dj) == (di_t, dj_t):
+                                        continue
+                                    loo = loo * blocks_up[:, :, :, di, dj, rule[a, wi, di, dj]]
+                            target_symbol = rule[a, wi, di_t, dj_t]
+                            new_blocks[:, :, :, di_t, dj_t, target_symbol] += weight * loo
+            new_down = new_blocks.transpose(0, 1, 3, 2, 4, 5).reshape(n, nb * s, nb * s, v)
+            new_down /= new_down.sum(axis=-1, keepdims=True).clip(min=1e-300)
+            down[l + 1] = new_down
+        return down
+
+    def bp_expected_correct_probability(self, xt: Array, levels: "list[Array]", mask_token: Optional[int] = None):
+        """Exact per-level "probability correct": the posterior mass BP
+        assigns to the *true* symbol at each node, averaged over all nodes
+        and samples at that level.
+
+        This is the quantity plotted in PNAS Figs. 5/7 -- not a thresholded
+        MAP-matches-truth indicator, but the exact expected accuracy of a
+        Bayes-optimal probabilistic reconstruction, with no Monte Carlo
+        sampling noise beyond which corrupted instances are averaged over.
+
+        Parameters
+        ----------
+        xt : (N, s**L, s**L) observed (possibly masked) leaf grids.
+        levels : ground-truth ``levels[l]`` for l = 0..L, as returned by
+            ``sample(..., return_hierarchy=True)``, matching ``xt``.
+
+        Returns
+        -------
+        p_correct : list of floats, one per level 0..L (root..leaf).
+        """
+        marginals = self.belief_propagation(xt, mask_token=mask_token)
+        p_correct = []
+        for l, post in enumerate(marginals):
+            true_vals = levels[l]  # (N, s^l, s^l)
+            p_true = np.take_along_axis(post, true_vals[..., None], axis=-1)[..., 0]
+            p_correct.append(float(p_true.mean()))
+        return p_correct
+
 
 class RandomHierarchy2DDataset(Dataset):
     """Torch ``Dataset`` of 2D Random Hierarchy Model samples.

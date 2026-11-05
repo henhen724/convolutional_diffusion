@@ -41,19 +41,21 @@ from src.utils.rhm_sampling import (AdaptiveWindowDiscreteScoreMachine,
 
 
 def run_cell(rhm, P, k, n_gen, nsteps, device, seed, schedule, alpha_smooth, gen_batch,
-             block_align, pad_mode, max_patches, k_adapt=None, h_min=None, h_mode='match'):
+             block_align, pad_mode, max_patches, k_adapt=None, h_min=None, h_mode='match',
+             n_min=1.0):
     """One (P, k) measurement: build the machine on P grids, generate, score.
 
     With ``k_adapt`` the window is not fixed: the machine holds one table per
-    listed ``k`` and picks, per site and per step, the largest whose posterior
-    entropy stays at or above ``h_min`` nats.
+    listed ``k`` and picks, per site and per step, the largest that matched at
+    least ``n_min`` training occurrences and whose posterior entropy stays at or
+    above ``h_min`` nats. ``h_min = 0, n_min = 1`` is the bare support test.
     """
     train_grids, _ = rhm.sample(P, seed=seed)
     t0 = time.time()
     if k_adapt:
         machine = AdaptiveWindowDiscreteScoreMachine(
             train_grids, vocab_size=rhm.v, kernel_sizes=k_adapt, h_min=h_min, h_mode=h_mode,
-            alpha_smooth=alpha_smooth, device=device, block_align=block_align,
+            n_min=n_min, alpha_smooth=alpha_smooth, device=device, block_align=block_align,
             pad_mode=pad_mode,
         )
     else:
@@ -92,6 +94,7 @@ def run_cell(rhm, P, k, n_gen, nsteps, device, seed, schedule, alpha_smooth, gen
         for frac, kbar in tr:
             bins.setdefault(round(frac, 1), []).append(kbar)
         res.update(k='adapt', k_set=list(k_adapt), h_min=float(h_min), h_mode=h_mode,
+                   n_min=float(n_min),
                    k_mean=float(np.mean([kb for _, kb in tr])) if tr else float('nan'),
                    k_schedule=sorted((f, round(float(np.mean(b)), 3)) for f, b in bins.items()))
     return res
@@ -122,6 +125,11 @@ def main():
     p.add_argument('--h_min', type=float, nargs='+', default=[0.0],
                    help='posterior-entropy floor in nats for --k_adapt. The largest window '
                         'staying above it is used; 0 means always the largest that matched')
+    p.add_argument('--n_min', type=float, nargs='+', default=[1.0],
+                   help='minimum matching training occurrences for --k_adapt to accept a window. '
+                        'A floor on the *count*, where --h_min is a floor on their diversity: a '
+                        'window matched by many copies of one patch is confident agreement, which '
+                        '--h_min rejects and this keeps. 1 is the bare support test')
     p.add_argument('--h_mode', choices=['token', 'match'], nargs='+', default=['match'],
                    help="which entropy the floor applies to: 'token' = the predicted-token "
                         "posterior, 'match' = the posterior over which training patch matched")
@@ -140,20 +148,22 @@ def main():
     for rs in range(args.rule_seeds):
         rhm = RandomHierarchyModel2D(v=args.v, s=args.s, L=args.L, m=args.m, seed=1000 + rs)
         # with --k_adapt the swept axis is the entropy floor, not the window
-        axis = ([(None, h, hmd) for hmd in args.h_mode for h in args.h_min]
-                if args.k_adapt else [(k, None, None) for k in args.k])
+        axis = ([(None, h, hmd, nm) for hmd in args.h_mode for h in args.h_min
+                 for nm in args.n_min]
+                if args.k_adapt else [(k, None, None, 1.0) for k in args.k])
         for ba in args.block_align:
-            for k, hm, hmd in axis:
+            for k, hm, hmd, nmin in axis:
                 for P in args.P:
                     r = run_cell(rhm, P, k, args.n_gen, nsteps, device, 7_000_000 + 1000 * rs + P,
                                  schedule, args.alpha_smooth, args.gen_batch, ba,
                                  args.pad_mode, args.max_patches,
-                                 k_adapt=args.k_adapt, h_min=hm, h_mode=hmd)
+                                 k_adapt=args.k_adapt, h_min=hm, h_mode=hmd, n_min=nmin)
                     r.update(v=args.v, s=args.s, L=args.L, m=args.m, rule_seed=rs, nsteps=nsteps,
                              alpha_smooth=args.alpha_smooth, schedule=args.schedule,
                              n_gen=args.n_gen, block_align=ba, pad_mode=args.pad_mode)
                     rows.append(r)
-                    lab = (f"adapt{args.k_adapt} {hmd} h={hm}" if args.k_adapt else f"k={k}")
+                    lab = (f"adapt{args.k_adapt} {hmd} h={hm} n>={nmin:g}"
+                           if args.k_adapt else f"k={k}")
                     head = f"v={args.v} L={args.L} m={args.m} {lab} ba={ba} P={P:>7} rs={rs}:"
                     if r.get('skipped'):
                         print(f"{head} SKIPPED, {r['n_distinct_patches']} patches "
