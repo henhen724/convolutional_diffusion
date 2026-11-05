@@ -181,6 +181,26 @@ excuse for the null.
    side stays at its published `n_gen=1024` on a 3.16x-spaced ladder, with per-cell bootstrap
    spread 1.2-3.5x over 3 seeds, so only an effect of roughly the 1D size (~2.8x) is resolvable
    here; a null will be reported as "no effect resolvable at this power", not as depth-stability.
+   **First paired estimate** (`scripts/rhm_depth2d_analysis.py`, 7 of 8 L=2 seeds against the
+   published 3-seed L=3 side): `x*(L=2)/x*(L=3)` = **1.07x [0.52, 2.34]** under A, **1.32x
+   [0.66, 2.56]** under B. That covers both 1 and 1D's ~2.8x, so it decides nothing yet -- and the
+   binding constraint is the **seed count**, not `n_gen`: per-cell bootstrap spread at L=3 is only
+   1.11-1.17x on the well-measured cells.
+7. **In flight: 51244750** (`scripts/rhm_depth2d_L3seeds.sbatch`, array 0-1, 1 H100 each, 10 h cap).
+   Takes L=3 m=2 to **10 seeds at v=2** and 8 at v=3 at the published settings, so they pool with
+   `L3peak_v*_m2_k7.json` instead of becoming a fourth population. Expected to shrink the interval
+   by ~`sqrt(10/3)` = 1.8x, enough to separate no-effect from the 1D-sized one. v=3's ladder now
+   runs to `P=6e6` rather than stopping at 3e6: `|R_L|` is 6.29e6 for two of its three published
+   seeds, so the old ladder reached only `P/|R_L| = 0.48` and never got past the peak, which is why
+   rs0 is unbracketed under both estimators. Enabled by a new `--rule_seed_start` (default 0,
+   every old invocation unchanged), verified against values 51244089 produced independently.
+   **Measurement fix folded in:** `L3k7_v*_m*.json` (n_gen 128) and `L3peak_v*_k7.json` (n_gen 1024)
+   both cover `P = 1e4, 3e4, 1e5`, so `rhm_peak_analysis.curves` hands every L=3 curve three
+   adjacent duplicate points at 8x different precision -- a zigzag right where a 3-point parabola
+   is weakest. The new analysis pools them into one binomial.
+   **Incidental, and it mattered:** `|R_L|` is **not** flat across rule seeds even at L=2 --
+   v=2 m=2 is 64/64/64 for seeds 0-2 but 38/44/44/40 for seeds 3-6. Recomputing it per seed rather
+   than assuming is load bearing, since x* is a ratio to it.
 
 ## Discipline notes
 - Analysis runs in `srun -p sganguli -t 10 -c 2 --mem=4G`, never a login node; there `ml devel math
