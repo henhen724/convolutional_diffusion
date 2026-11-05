@@ -48,8 +48,9 @@ schedule can explain more of k at high `v` and still pick wrong at the sites tha
 ## Next steps
 1. Build the C+D deck + notebook (`build_s3_slides.py`, traces from `rhm_adaptive_trace.py
    --k_fixed`, tokenization page) and upload. Rebuild once 51143385 adds the last 2 cells.
-2. The local signal is online and not positional. Next candidate regressor: the revealed-neighbour
-   count in the site's own window, which unlike phase changes sample to sample.
+2. Name the >=53% residual in D. Reveal *count* caps at .47, so the rest is *which* tokens: next
+   regressor is the number of level-1 words still compatible with the window's revealed sites
+   (grammar-side, computable from the partial grid, varies at fixed count). Extend `KRecorder`.
 
 ## Discipline notes
 - Analysis runs in `srun -p sganguli -t 10 -c 2 --mem=4G`, never a login node; there `ml devel math

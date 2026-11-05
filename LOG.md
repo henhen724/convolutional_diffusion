@@ -108,3 +108,13 @@ holds the live state.
   quality -- the schedule can track k better at high v and still pick wrong where it costs most.
   (b) "Capping the criterion to its own schedule costs nothing" was a v2 artifact; at v3/v4 it
   costs 8-30%, within 20% of adaptive in only 5/9 cells.
+- 2026-11-04: C+D delivered as a deck and notebook. `scripts/build_s3_slides.py` (8 landscape
+  pages: title, s-aware tokenization for the 9x9 s=3 board, the fair test, both floors, the four
+  arms, the locality decomposition, reveal-by-reveal traces, conclusion) and
+  `notebooks/rhm_patch_size_2026-11-04.ipynb`, executed in place. Uploaded to OneDrive as
+  `2026-11-04_rhm-s-3-ls-patch-size-rule-...pdf`. The fair test is now **12/12 cells** -- 51143385
+  wrote its last two (v2 m3 rs1, rs2) while still running -- adaptive beating the best fixed k in
+  all twelve at a median 12x, with the fixed optimum at k=7 rather than U1=5 in 10 of 12.
+- The s=2 result is not withdrawn, it is explained. `rhm_adaptive_window_2026-11-04.ipynb` had the
+  criterion *losing* 20/21 cells; at s=2, `U1 = side - 1` leaves one real rung, so that notebook
+  measured the machinery's cost with none of its benefit reachable. Both notebooks now say so.
