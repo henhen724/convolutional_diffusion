@@ -1,0 +1,60 @@
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=      2 rs=0: gram=0.493 novel=0.509 succ=0.002 lvl=[0.493, 0.954, 1.0] patches=64 (1.6s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=      3 rs=0: gram=0.733 novel=0.282 succ=0.014 lvl=[0.733, 0.933, 1.0] patches=91 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=      4 rs=0: gram=0.616 novel=0.397 succ=0.013 lvl=[0.616, 0.92, 1.0] patches=123 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=      6 rs=0: gram=0.734 novel=0.295 succ=0.029 lvl=[0.734, 0.91, 1.0] patches=141 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=      8 rs=0: gram=0.670 novel=0.340 succ=0.010 lvl=[0.67, 0.911, 1.0] patches=197 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=     11 rs=0: gram=0.697 novel=0.315 succ=0.012 lvl=[0.697, 0.919, 1.0] patches=288 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=     15 rs=0: gram=0.660 novel=0.358 succ=0.018 lvl=[0.66, 0.915, 1.0] patches=355 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=     20 rs=0: gram=0.674 novel=0.345 succ=0.019 lvl=[0.674, 0.925, 1.0] patches=420 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=     27 rs=0: gram=0.688 novel=0.343 succ=0.031 lvl=[0.688, 0.931, 1.0] patches=520 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=     36 rs=0: gram=0.613 novel=0.407 succ=0.020 lvl=[0.613, 0.925, 1.0] patches=628 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=     48 rs=0: gram=0.679 novel=0.336 succ=0.016 lvl=[0.679, 0.936, 1.0] patches=739 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=     64 rs=0: gram=0.609 novel=0.408 succ=0.017 lvl=[0.609, 0.94, 1.0] patches=823 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=     85 rs=0: gram=0.661 novel=0.347 succ=0.008 lvl=[0.661, 0.947, 1.0] patches=950 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=    113 rs=0: gram=0.661 novel=0.342 succ=0.003 lvl=[0.661, 0.952, 1.0] patches=940 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=    150 rs=0: gram=0.655 novel=0.348 succ=0.002 lvl=[0.655, 0.952, 1.0] patches=1151 (0.9s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=    200 rs=0: gram=0.656 novel=0.345 succ=0.001 lvl=[0.656, 0.958, 1.0] patches=1169 (0.9s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=    265 rs=0: gram=0.684 novel=0.316 succ=0.000 lvl=[0.684, 0.959, 1.0] patches=1183 (0.9s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=    350 rs=0: gram=0.676 novel=0.324 succ=0.000 lvl=[0.676, 0.958, 1.0] patches=1200 (0.9s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=      2 rs=1: gram=0.932 novel=0.094 succ=0.025 lvl=[0.932, 0.975, 1.0] patches=54 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=      3 rs=1: gram=0.828 novel=0.197 succ=0.025 lvl=[0.828, 0.937, 1.0] patches=89 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=      4 rs=1: gram=0.719 novel=0.310 succ=0.029 lvl=[0.719, 0.899, 1.0] patches=122 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=      6 rs=1: gram=0.792 novel=0.259 succ=0.051 lvl=[0.792, 0.933, 1.0] patches=162 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=      8 rs=1: gram=0.762 novel=0.297 succ=0.059 lvl=[0.762, 0.913, 1.0] patches=171 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=     11 rs=1: gram=0.735 novel=0.329 succ=0.064 lvl=[0.735, 0.923, 1.0] patches=227 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=     15 rs=1: gram=0.749 novel=0.303 succ=0.052 lvl=[0.749, 0.935, 1.0] patches=288 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=     20 rs=1: gram=0.800 novel=0.294 succ=0.094 lvl=[0.8, 0.945, 1.0] patches=396 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=     27 rs=1: gram=0.767 novel=0.295 succ=0.062 lvl=[0.767, 0.942, 1.0] patches=500 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=     36 rs=1: gram=0.833 novel=0.251 succ=0.084 lvl=[0.833, 0.954, 1.0] patches=523 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=     48 rs=1: gram=0.820 novel=0.273 succ=0.094 lvl=[0.82, 0.953, 1.0] patches=663 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=     64 rs=1: gram=0.831 novel=0.212 succ=0.042 lvl=[0.831, 0.963, 1.0] patches=727 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=     85 rs=1: gram=0.864 novel=0.184 succ=0.049 lvl=[0.864, 0.964, 1.0] patches=805 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=    113 rs=1: gram=0.862 novel=0.165 succ=0.028 lvl=[0.862, 0.966, 1.0] patches=950 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=    150 rs=1: gram=0.881 novel=0.129 succ=0.010 lvl=[0.881, 0.973, 1.0] patches=957 (0.8s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=    200 rs=1: gram=0.868 novel=0.139 succ=0.008 lvl=[0.868, 0.967, 1.0] patches=988 (0.9s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=    265 rs=1: gram=0.861 novel=0.153 succ=0.014 lvl=[0.861, 0.967, 1.0] patches=1012 (0.9s)
+v=2 L=2 m=2 adapt[1, 3, 5] match h=0.0 n>=1 ba=1 P=    350 rs=1: gram=0.873 novel=0.127 succ=0.000 lvl=[0.873, 0.97, 1.0] patches=1036 (0.9s)
+wrote results/rhm_sampling/2026-11-05/smoke_depth2d_v2m2.json
+	Command being timed: "python3 scripts/rhm_sampling_complexity.py --v 2 --s 2 --L 2 --m 2 --k_adapt 1 3 5 --h_mode match --h_min 0 --P 2 3 4 6 8 11 15 20 27 36 48 64 85 113 150 200 265 350 --n_gen 4096 --gen_batch 4096 --rule_seeds 2 --block_align 1 --pad_mode outside --out results/rhm_sampling/2026-11-05/smoke_depth2d_v2m2.json"
+	User time (seconds): 27.83
+	System time (seconds): 5.23
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:32.88
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1098620
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 5
+	Minor (reclaiming a frame) page faults: 333569
+	Voluntary context switches: 2387
+	Involuntary context switches: 56
+	Swaps: 0
+	File system inputs: 20736
+	File system outputs: 1576
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

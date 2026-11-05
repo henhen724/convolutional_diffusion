@@ -1,0 +1,69 @@
+srun: job 51243331 queued and waiting for resources
+srun: job 51243331 has been allocated resources
+The following modules were not unloaded:
+  (Use "module --force purge" to unload all):
+
+  1) math   2) devel
+curves scored: 30
+
+--- 1. estimator noise on a FIXED grammar (bootstrap, 400 draws) ---
+cell                     A geo-sd   B geo-sd     A bias     B bias
+v2m2 L3 rs0                1.82x      1.45x      0.995      1.054
+v2m2 L3 rs1                1.49x      1.32x      0.966      0.997
+v2m2 L3 rs2                1.18x      1.09x      1.004      1.028
+v2m3 L2 rs0                1.18x      1.05x      0.998      0.997
+v2m3 L2 rs1                1.18x      1.03x      1.006      0.998
+v3m2 L3 rs1                3.53x      2.96x      0.130          -
+v3m2 L3 rs2                1.14x      1.28x      0.968      0.954
+v3m3 L2 rs0                2.14x      1.13x      1.033      1.003
+v3m3 L2 rs1                1.80x      1.35x      2.294      1.243
+v3m3 L2 rs2                1.43x      1.05x      0.986      0.988
+v4m2 L2 rs0                1.35x      1.36x      1.002      1.032
+v4m2 L2 rs1                1.02x      1.17x      1.000      0.966
+v4m3 L2 rs0                1.43x      1.20x      1.059      1.032
+v4m3 L2 rs1                1.32x      1.26x      0.996      1.019
+v4m3 L2 rs2                1.19x      1.31x      1.002      1.050
+v4m4 L2 rs0                2.10x      1.30x      0.933      1.035
+v4m4 L2 rs1                1.43x      1.14x      0.964      1.015
+v4m4 L2 rs2                1.79x      1.28x      0.977      0.978
+v4m5 L2 rs0                1.37x      1.16x      0.932      0.977
+v4m5 L2 rs1                1.28x      1.12x      0.967      1.076
+v4m5 L2 rs2                1.17x      1.12x      1.006      0.993
+v4m6 L2 rs0                1.71x      1.10x      1.080      1.030
+v4m6 L2 rs1                1.59x      1.08x      1.000      0.989
+v4m6 L2 rs2                1.53x      1.14x      0.976      0.951
+v6m3 L2 rs0                1.76x      1.64x      1.055      0.963
+v6m3 L2 rs1                1.83x      1.44x      1.070      0.886
+v6m3 L2 rs2                1.51x      1.26x      1.042      0.996
+v8m3 L2 rs0                1.64x      1.53x      1.016      0.814
+v8m3 L2 rs1                3.33x      2.29x      1.414      0.834
+v8m3 L2 rs2                1.97x      2.03x      0.919      1.184
+median estimator noise:  A 1.50x   B 1.26x
+median |log| displacement B vs A on the real curves: 0.202 (= 1.22x)
+
+--- 2. observed spread across rule seeds, same (v,m,L) ---
+(v,m,L)           seeds   obs sd A   obs sd B     est sd A     est sd B
+v2m2 L3              3      1.47x      1.45x        1.49x        1.32x
+v2m3 L2              2      1.21x      1.25x        1.18x        1.04x
+v3m2 L3              2      2.50x          -        2.34x        2.12x
+v3m3 L2              3      2.27x      1.03x        1.80x        1.13x
+v4m2 L2              2      1.70x      1.29x        1.18x        1.27x
+v4m3 L2              3      1.54x      1.14x        1.32x        1.26x
+v4m4 L2              3      1.37x      1.33x        1.79x        1.28x
+v4m5 L2              3      1.29x      1.06x        1.28x        1.12x
+v4m6 L2              3      1.19x      1.04x        1.59x        1.10x
+v6m3 L2              3      1.39x      1.32x        1.76x        1.44x
+v8m3 L2              3      2.12x      2.12x        1.97x        2.03x
+
+--- 3. the split (medians over cells, log-variances subtract) ---
+  A current   observed 1.47x = estimator 1.59x  (x)  grammar 1.00x
+  B proposed  observed 1.27x = estimator 1.27x  (x)  grammar 1.02x
+
+--- 4. what the headline becomes under each estimator ---
+estimator     cells     med x*     geo-sd  b in P*~|R_L|^b
+A current        30     0.1966      1.97x   0.965 +- 0.041
+                      95% CI on the median  [0.1503, 0.2724]
+B proposed       29     0.1768      1.77x   0.927 +- 0.033
+                      95% CI on the median  [0.1267, 0.2358]
+
+wrote /scratch/users/hshunt/convolutional_diffusion/results/rhm_sampling/2026-11-05/peak_noise.json (30 curves)
