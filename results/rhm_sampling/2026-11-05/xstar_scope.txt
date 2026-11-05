@@ -1,0 +1,11 @@
+n=16 breakdown by k   (x* = P*/|R_L|, bracketed peaks only)
+dim  k    U1    cells  med x*   
+1    15   15    23     0.0498   
+1    all  -     23     0.0498      <- pooled over k
+1    =U1  -     23     0.0498      <- k == U1 only
+2    3    3     25     0.1925   
+2    all  -     25     0.1925      <- pooled over k
+2    =U1  -     25     0.1925      <- k == U1 only
+
+matched n=16, k==U1 : 1D 0.0498 (23)  2D 0.1925 (25)  -> 3.87x
+matched n=16, all k : 1D 0.0498 (23)  2D 0.1925 (25)  -> 3.87x

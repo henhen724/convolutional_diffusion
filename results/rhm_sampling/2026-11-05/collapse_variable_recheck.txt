@@ -1,0 +1,24 @@
+140 bracketed peaks; 128 have a saturated N_k (1D 98, 2D 30, of which 30 exact)
+
+--- 1. the two candidate ratios, by dimension and depth ---
+dim  n     cells  med x*      geo sd    med y*      geo sd    med N_k/|R_L|
+1   D 4     42     0.1483      2.49     x 0.5998      2.07     x 1.000
+1   D 8     43     0.0719      2.20     x 0.3342      1.68     x 1.664
+1   D 16    13     0.0599      1.83     x 0.3452      1.66     x 3.040
+2   D 16    25     0.1925      1.97     x 1.5210      1.65     x 2.593
+2   D 64    5      0.2075      2.15     x 4.4529      1.34     x 3.030
+
+--- 2. does y* collapse the dimensions where x* does not? ---
+  x* = P*/|R_L|    1D 0.1094 (2.53x, n=98)   2D 0.1966 (1.97x, n=30)   gap 1.80x   pooled sd 2.54x
+  y* = P*n/N_k     1D 0.4276 (2.00x, n=98)   2D 1.6894 (1.95x, n=30)   gap 3.95x   pooled sd 2.47x
+
+  at matched n=16 (13 1D cells, 25 2D):
+    x*  1D 0.0599  vs  2D 0.1925   -> 3.21x apart
+    y*  1D 0.3452  vs  2D 1.5210   -> 4.41x apart
+
+--- 3. free fit P* ~ N_k^c, pooled over both dimensions ---
+  P* ~ (N_k/n)^1.075 +- 0.032  (1 is 2.3 sd away),  prefactor 0.426
+  P* ~ |R_L|^0.921 +- 0.028  (1 is 2.8 sd away)   [same cells, for contrast]
+  residual scatter: 2.43x about the N_k fit, 2.47x about the |R_L| fit
+
+wrote /scratch/users/hshunt/convolutional_diffusion/results/rhm_sampling/2026-11-05/collapse_variable_recheck.json (128 cells)

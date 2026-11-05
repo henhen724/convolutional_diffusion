@@ -1,0 +1,6 @@
+median, n=16, bracketed            1D 0.0498 (23)   2D 0.1925 (25)   3.87x
+geomean, n=16, bracketed           1D 0.0358 (23)   2D 0.2109 (25)   5.89x
+arith mean, n=16                   1D 0.0579          2D 0.2643
+median, n=16, ALL peaks            1D 0.0498 (23)   2D 0.1895 (27)   3.81x
+median, pooled over n              1D 0.0834 (110)   2D 0.1966 (30)   2.36x
+geomean, pooled over n             1D 0.0812 (110)   2D 0.2123 (30)   2.61x
