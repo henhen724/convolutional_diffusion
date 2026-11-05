@@ -293,10 +293,20 @@ excuse for the null.
    with the estimator term in the log-variance split; section 4's 1.97x is the spread across
    all 30 cells and also contains the real movement of x* with `(v,m)`. The deck's bar chart
    plots the first and quotes the second as a separate line.
-   **Remaining before the deadline:** when 51244750 lands, re-run `rhm_depth2d_analysis.py`
-   (both `--P_min 10 --copy_rel 0` and `--P_min 0 --copy_rel 0.5`) and
-   `rhm_xstar_scaling.py --min_RL 200` (and 1000), update section A, re-render, then
-   `claude-results-upload.sh`.
+10. **Queued: 51256604** (`scripts/rhm_audit_refresh.sbatch`, CPU, 1 h cap,
+   `--dependency=afterok:51244750`). Re-runs `rhm_copy_regime.py`, both depth cuts, the
+   `copy_rel` sensitivity sweep and `rhm_xstar_scaling.py` at `--min_RL 200` and `1000`,
+   then re-renders the deck -- so no one polls the scheduler for four hours. It deliberately
+   does **not** upload.
+   **New, and it is the answer to "you swapped one arbitrary cut for another":** the relative
+   cut's verdict is flat in its own free parameter. Over `copy_rel` 0.25 -> 0.8, v=2 reads
+   1.37x..2.06x and v=3 0.51x..1.09x, every interval covering 1, and nothing anywhere near the
+   2.8x the absolute floor produced. (Measured on partial output, 7 of 10 v=2 seeds landed;
+   51256604 redoes it on the full set and the deck quotes whatever that says.)
+   **Then, by hand:** read the refreshed numbers, update section A and the deck's
+   depth/scaling pages if they moved, `git add -f` the new `results/.../*.json|txt`, and
+   `~/.local/bin/claude-results-upload.sh convolutional_diffusion
+   notebooks/2026-11-05_rhm_audit_slides.pdf "<what>" "<result>"` before 12:00 PT Fri 11/6.
 
 ## Discipline notes
 - Analysis runs in `srun -p sganguli -t 10 -c 2 --mem=4G`, never a login node; there `ml devel math
