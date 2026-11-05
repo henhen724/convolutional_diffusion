@@ -30,7 +30,7 @@ The local **revealed-neighbour count** (how many of the 9x9 around a site are fi
 That residual is **grammar, mostly across block boundaries** (`rhm_k_crossblock.py`, 18/18): over
 (nrev, n_words, n_sym_local), the block's admissible-symbol count *after every other block
 constrains it through the root* adds **median +0.196 R^2** (+.116..+.294) net of a permutation null
-of +0.000; within-block control +0.002; the root tightens a block at 46-71% of observations, rising
+of +0.000; within-block control <=+0.002; root tightens a block at 46-71% of observations, rising
 with `v`. **It is one bit, not a count** -- a bare "no root production survives every block at once"
 flag reproduces the gain to +0.000 in 18/18, so the straddling window runs the *consistency check*
 hshunt described rather than accumulating evidence. Unregistered: the sign on `k` **flips with `v`**

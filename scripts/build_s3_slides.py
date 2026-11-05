@@ -377,30 +377,33 @@ def page_crossblock(pdf, xb):
     ctrl = [r['r2_base_nsl'] - r['r2_base'] for r in xb]
     x = np.arange(len(xb))
 
-    ax = fig.add_axes([0.07, 0.56, 0.42, 0.31])
+    ax = fig.add_axes([0.075, 0.615, 0.40, 0.265])
     for v, c in ((2, '#3b4cc0'), (3, '#7b9ff9'), (4, '#b40426')):
         sel = [i for i, r in enumerate(xb) if r['v'] == v]
         ax.bar(x[sel], [net[i] for i in sel], 0.78, color=c, label='v = %d' % v)
-    ax.bar(x, ctrl, 0.78, color='#444',
-           label='same, but WITHIN the block')
+    ax.plot(x, ctrl, 'k_', ms=9, mew=1.8, label='same test WITHIN the block')
     ax.axhline(0.02, ls='--', c='#111', lw=1.2)
-    ax.text(0.4, 0.027, 'registered threshold 0.02', fontsize=8.5)
-    ax.set_xticks([]); ax.set_xlabel('cell (v x rule seed x P)')
-    ax.set_ylabel('$R^2$ added to (reveal count, n_words)')
-    ax.legend(frameon=False, fontsize=9)
+    ax.text(0.3, 0.030, 'registered threshold 0.02', fontsize=8)
+    ax.set_xticks([]); ax.set_xlabel('cell (v x rule seed x P)', fontsize=9)
+    ax.set_ylabel('$R^2$ added to\n(reveal count, n_words)', fontsize=9.5)
+    ax.legend(frameon=False, fontsize=8, ncol=2, loc='upper center')
+    ax.set_ylim(0, max(net) * 1.42)
     ax.set_title('cross-block symbol count: %d/%d cells clear it'
-                 % (sum(1 for n in net if n >= 0.02), len(net)), fontsize=13)
+                 % (sum(1 for n in net if n >= 0.02), len(net)), fontsize=12.5)
 
-    ax2 = fig.add_axes([0.58, 0.56, 0.37, 0.31])
+    ax2 = fig.add_axes([0.585, 0.615, 0.365, 0.265])
     gd = [r.get('gain_dead') for r in xb]
     if all(g is not None for g in gd):
         gg = [r['gain_graded'] for r in xb]
-        ax2.bar(x, gd, 0.78, color='#777', label='binary "no root survives"')
+        ax2.bar(x, gd, 0.78, color='#777',
+                label='binary "no root production survives"')
         ax2.bar(x, gg, 0.78, bottom=gd, color='#b40426',
-                label='graded symbol count on top')
-        ax2.set_ylabel('$R^2$ added'); ax2.legend(frameon=False, fontsize=9)
-        ax2.set_title('is it just "already doomed"?', fontsize=13)
-        ax2.set_xticks([]); ax2.set_xlabel('cell')
+                label='grading the count on top (median %+.3f)' % med(gg))
+        ax2.set_ylabel('$R^2$ added', fontsize=9.5)
+        ax2.legend(frameon=False, fontsize=8, loc='upper center')
+        ax2.set_ylim(0, max(gd) * 1.42)
+        ax2.set_title('is the gain graded, or one bit?', fontsize=12.5)
+        ax2.set_xticks([]); ax2.set_xlabel('cell', fontsize=9)
         split = med([g / (d + g) for d, g in zip(gd, gg) if d + g > 0])
         fm = med([r.get('frac_multi', float('nan')) for r in xb])
         dead_line = (
@@ -451,8 +454,8 @@ def page_crossblock(pdf, xb):
            % (min(tg), max(tg), med(net), sum(1 for n in net if n >= 0.02), len(net),
               med([r['gain_null'] for r in xb]), med(ctrl), dead_line,
               lo, sgn[lo][0], sgn[lo][2], hi, sgn[hi][1], sgn[hi][2]))
-    fig.text(0.065, 0.48, txt, fontsize=11, va='top', family='monospace',
-             linespacing=1.4)
+    fig.text(0.065, 0.545, txt, fontsize=9.8, va='top', family='monospace',
+             linespacing=1.34)
     pdf.savefig(fig); plt.close(fig)
 
 
@@ -648,17 +651,18 @@ def main():
              'SAME mean k, keeps only %.0f%% of the success (%d/%d cells).'
              % (100 * sa, len(by), len(by)),
              'Position explains none of the choice (R^2 < 0.001); local reveal count\n'
-             'explains at most %.2f. The rest is irreducibly content-dependent.' % mx]
+             'explains at most %.2f. The rest is content, and that content is grammar.'
+             % mx]
+            # title_page fits five 2-line bullets; the s=3 caveat yields its slot
+            # to this one and is still stated in full on the conclusion page.
             + ([
-             'That residual is grammar. The block\'s own ambiguity adds %+.3f R^2, and\n'
-             'its consistency with the OTHER blocks through the root -- visible only to\n'
-             'a straddling window -- adds a further %+.3f, net of a permutation null.'
+             'The block\'s own ambiguity adds %+.3f R^2, and its consistency with the\n'
+             'OTHER blocks through the root -- only a straddling window sees it -- %+.3f.'
              % (med([r['r2_base'] - r['r2_nrev'] for r in xb_rows]),
                 med([r['r2_full'] - r['r2_null'] for r in xb_rows]))]
-             if xb_rows else [])
-            + [
+             if xb_rows else [
              's=3, L=2 is the first board where this question is even askable:\n'
-             'at s=2 the only rung between U1 and the grid side is U1 itself.'])
+             'at s=2 the only rung between U1 and the grid side is U1 itself.']))
         page_tokenization(pdf, grid0, v=2, s=3, L=2)
         page_fair_test(pdf, cells)
         page_floors(pdf, s3, nmin_rows)
