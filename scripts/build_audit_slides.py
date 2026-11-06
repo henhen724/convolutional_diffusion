@@ -568,7 +568,23 @@ def page_scaling(pdf, D):
 # page 7: what changed
 # --------------------------------------------------------------------------
 
-def page_conclusion(pdf, commit):
+def page_conclusion(pdf, D, commit):
+    # Every number here is read back from the fit files, so that re-running
+    # the analysis on more seeds cannot leave the summary page lying.
+    fits = json.load(open(D / 'xstar_scaling_mr200.json'))['fits']
+    b2 = [fits['A']['b_2d'], fits['B']['b_2d']]
+    f1k = D / 'xstar_scaling_mr1000.json'
+    if f1k.exists():
+        b2 += [json.load(open(f1k))['fits'][w]['b_2d'] for w in ('A', 'B')]
+    e_lo, e_hi = 1.0 - max(b2), 1.0 - min(b2)   # |R_L| exponent, as a decay
+    # xstar_scaling.json is the run with no |R_L| floor at all: it is where
+    # the absolute P floor does its damage to the 1D exponent.
+    b1_nofloor = json.load(open(D / 'xstar_scaling.json'))['fits']['A']['b_1d']
+    # size of the depth effect the absolute floor manufactures, at v=2 where
+    # |R_L| is smallest and the floor therefore bites hardest.
+    fl = json.load(open(D / 'depth2d_pmin10.json'))['verdict']
+    floor_art = max(fl['A_v2'][0], fl['B_v2'][0])
+
     fig = plt.figure(figsize=PAGE)
     fig.suptitle('What the audit changed, and what it did not', fontsize=21,
                  weight='bold')
@@ -580,12 +596,13 @@ def page_conclusion(pdf, commit):
         '  The C(k) = f0^U ceiling stays retracted.\n\n'
         '  It survived a change of peak estimator\n'
         '  (0.197 -> 0.177, b 0.965 -> 0.927, overlapping),\n'
-        '  a change of subsample (b_2D = 0.979 on cells\n'
+        '  a change of subsample (b_2D = %.3f on cells\n'
         '  with |R_L| >= 200), and a paired depth test.\n\n'
         'SHARPER -- x* is flat, not constant\n'
-        '  x* = |R_L|^-0.02..-0.06 across five decades.\n'
+        '  x* = |R_L|^-%.2f..-%.2f across five decades.\n'
         '  Quote 0.21 |R_L| as a law in 2D; in 1D the\n'
         '  exponent is -0.36 and there is no law.\n\n'
+        % (fits['A']['b_2d'], e_lo, e_hi) +
         'STILL OPEN\n'
         '  Why 1D and 2D differ at all. Four mechanisms\n'
         '  refuted now: coverage, saturation, entropy\n'
@@ -601,10 +618,11 @@ def page_conclusion(pdf, commit):
         '  2. An absolute P floor to cut the copying\n'
         '     regime. Its severity scales as 1/|R_L| --\n'
         '     the variable under study -- so it\n'
-        '     manufactured a 2.8x "depth effect" in 2D\n'
-        '     and dragged b_1D from 0.64 to 0.51.\n'
+        '     manufactured a %.1fx "depth effect" in 2D\n'
+        '     and dragged b_1D from %.2f to %.2f.\n'
         '     Fixed: cut the regime by its own\n'
         '     signature, relative to each cell.\n\n'
+        % (floor_art, fits['A']['b_1d'], b1_nofloor) +
         'Both defects pointed the same way: toward a\n'
         'more interesting result. That is the warning\n'
         'sign, and it is why the v=4 control existed.\n'
@@ -621,7 +639,7 @@ def page_conclusion(pdf, commit):
              linespacing=1.42)
     fig.text(0.055, 0.075,
              'convolutional_diffusion @ %s   |   jobs 51244089 (2D L=2 m=2 at v=2,3, '
-             '8 seeds, n_gen 16384) and 51244750 (L=3 seed extension)\n'
+             '8 seeds, n_gen 16384), 51244750 (L=3 seed extension) and 51256604 (re-analysis)\n'
              'scripts/rhm_{peak_noise,copy_regime,depth2d_analysis,xstar_scaling}.py'
              % commit,
              fontsize=9.5, color='#666666', va='top', linespacing=1.5)
@@ -673,7 +691,7 @@ def main():
         page_scaling(pdf, D)
         page_copy(pdf, D)
         page_depth(pdf, D)
-        page_conclusion(pdf, commit)
+        page_conclusion(pdf, D, commit)
     print('wrote %s (%.2f MB, %d pages)'
           % (out, out.stat().st_size / 1e6, pdf.n))
 
