@@ -119,7 +119,33 @@ window covers the whole grid, and `lv_pooled == |R_L|` with closure `1.000` in *
 > the LS machine -- it is strong when synonyms are few and switches off entirely when they are
 > many, faster at small `v`.
 Why this matters for section A: the headline population is concentrated at small `m`, i.e. exactly
-where the check is near-maximal. Whether that is what sets `x*` is the open test below.
+where the check is near-maximal. **So it had to be tested as a mechanism -- and it fails. See E3.**
+
+### E3. Mechanism five -- the straddling check does NOT set the sampling complexity
+Exact closure stops at v=3 (43M grids; v=4 is 4.3e9) and the peak population runs to v=8, so the
+mechanism was untestable until `scripts/rhm_closure_mc.py`: everything but one term is cheap
+(`lv_blocks = |R_j*|^n_blocks` analytic, `|R_L| <= 31k`), so draw grids uniformly from the coupon
+set and measure the fraction whose every window is pooled-legal. **Validated against all 75 exact
+enumerations** -- worst `|log(MC/exact)| = 0.0388` against a 3 SE bar of 0.0424 at `n_mc` only
+20k, which also settles empirically that `lv_pooled` is contained in `lv_blocks` (not guaranteed a
+priori, since a pooled window can match another phase's training window). Run at `n_mc = 4e6` it
+puts a closure on all 30 measured cells, spanning **0.163 to 1.002**.
+**The design permits a crossing test, which is why this population can decide it:** closure moves
+*oppositely* along the two ladders in the data -- it falls 0.96 -> 0.53 along `v=4, m=2..6`, and
+rises 0.41 -> 1.00 along `m=3, v=2..8`. So "x* tracks closure" is a different claim from "x*
+tracks v" or "x* tracks m".
+**Registered before fitting:** slope of `log x*` on closure is negative pooled (1), negative in
+*both* ladders separately (2), and closure adds `>= 0.05` R^2 over `(log v, log m, log |R_L|)`
+against a within-ladder permutation null (3). **Registered 1 fails, in the opposite direction:**
+the pooled slope is **+1.82 [1.11, 2.96] (A) / +1.73 [1.14, 2.63] (B)**. But that is not a reverse
+finding, because **3 fails too**: closure adds **0.006 (A) / 0.015 (B)** R^2 over the design
+variables, inside the permutation null (p95 0.078 / 0.050).
+> **Mechanism five refuted: closure is a proxy for `(v, m)`, not an independent driver of `x*`.
+> The straddling consistency check is large, exactly measurable, and strongly `m`-dependent -- and
+> it does not set the sampling complexity in either direction.**
+The `(v, m)` spread in `x*` therefore remains unexplained, and the register of refuted mechanisms
+is now: coverage, saturation, entropy budget, scale, and the straddling check. Working files:
+`results/rhm_sampling/2026-11-05/{straddle_m,closure_peakpop,closure_xstar}.json`.
 
 ## Open problems
 - ~~The 1D/2D offset has no mechanism after three refutations. No fourth without a measurement.~~
@@ -135,6 +161,12 @@ where the check is near-maximal. Whether that is what sets `x*` is the open test
   which is what makes `P* = 0.21 |R_L|` a law there and not in 1D (`|R_L|^-0.36`). So mechanism
   four is gone and the offset is sharper, not softer: it is now a difference in *exponent*, not
   only in prefactor.
+  **Fifth measured and refuted 2026-11-06 (E3):** the straddling consistency check, quantified
+  exactly as `closure` and estimated by a Monte Carlo validated on 75 exact enumerations. It is
+  the strongest candidate the board had -- near-maximal at the small `m` where the headline
+  population sits, and switching off entirely by `v=2, m=6`. Registered slope negative; measured
+  **+1.82 / +1.73** pooled, but adding only **0.006 / 0.015** R^2 over `(log v, log m, log |R_L|)`,
+  inside a within-ladder permutation null. Collinear with the design, not a driver.
   Methodological catch worth keeping: the `P >= 10` floor that removes the 2D copying regime
   censors small-`|R_L|` 1D cells whose peak lies below it, and that censoring is `|R_L|`-dependent,
   so without `--min_RL` the fit reads `b_1D = 0.510`. Any `x*` fit across dimensions needs both cuts.
