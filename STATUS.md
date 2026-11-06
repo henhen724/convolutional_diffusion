@@ -306,7 +306,11 @@ excuse for the null.
    the only question that decides the matter -- whether a 1D-sized step is still inside the
    interval -- against the median read from `depth1d_noise_1step.json`. The deck's depth and
    scaling pages had the same disease (`1.58x`, `6.65x`, `^-0.02` typed as literals) and now
-   interpolate from `fits`/`verdict`.
+   interpolate from `fits`/`verdict`. A proof-read of all 8 rendered pages caught the summary
+   page carrying the same three stale literals (`b_2D = 0.979`, `^-0.02..-0.06`, a `2.8x`
+   floor artifact); it now reads them from `xstar_scaling_{mr200,mr1000,}.json` and
+   `depth2d_pmin10.json` (0.988, `^-0.01..-0.04`, 2.5x). **Rule for this deck: no number on a
+   slide is one I typed.**
    **And it is the answer to "you swapped one arbitrary cut for another":** the relative
    cut's verdict is flat in its own free parameter. On the full refreshed set, over
    `copy_rel` 0.25 -> 0.8 and both estimators, v=2 reads **1.21x..1.76x** and v=3
