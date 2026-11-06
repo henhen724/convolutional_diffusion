@@ -23,7 +23,7 @@ The **published population is the one to quote**, and 3.87x is the honest headli
 Every n=16 peak in both dimensions already sits at `k=U1`, so the old "(k=U1=15)" qualifier was not doing scoping work. **The published gap is larger than this section recorded, so scoping `P* = 0.21 |R_L|` to 2D is better supported than section A claimed, not worse.** Pooled over n: 1D 0.0834 (110 cells), 2D 0.1966 (30), 2.36x -- that 2D 0.1966 is section A's 0.197.
 **Correction to commit `3a0bcc7`:** that commit claimed 0.159 "reproduces under no statistic" and that 0.083 was the pooled-over-all-n 1D median mislabeled as n=16. Both wrong -- I had searched only the published population. The pair is `BR1`'s, exactly as tabulated above; pooled-over-n 1D being 0.0834 against `BR1`'s 0.0828 is a coincidence that is what misled me. What survives from that commit: the published-population figures, and that my earlier flag against `rhm_collapse_variable.py`'s docstring (0.050 / 0.193 / 3.9x) was **backwards -- the docstring was right**, and it was correctly left unedited. Working files: `results/rhm_sampling/2026-11-05/xstar_{scope,stats}.txt`.
 Three explanations **all refuted**: coverage (sign backwards, Spearman +1.00); saturation `y* = P* n/N_k` (4.4x across dimensions, 61x across k within 1D); entropy budget `exp(H_tot)/|R_L|` (1D 0.68 / 2D 337.6, **496x**). The third did explain k=11 beating U1=15: H_tot falls 11.82 -> 8.21 nats over k=3..17.
-**Fourth refuted 2026-11-05 (`scripts/rhm_xstar_scaling.py`), and this one was measured, not argued.** Since `x* = P*/|R_L| = |R_L|^(b-1)`, `b<1` *is* "x* falls as |R_L| grows" -- so the gap, the 7.6x spread across `(v,m)`, and the depth effect could all be one fact: the two populations sitting at different `|R_L|`. Fitting `log P* = b log|R_L| + c + d*1[2D]` across both dimensions and depths, with each cell's binomial bootstrap carried through, the offset **does not collapse -- it grows**, because 1D cells sit at smaller `|R_L|` and a common `b` over-corrects: `d` = **4.83x (A) / 5.29x (B)** on cells with `|R_L| >= 200`, **6.65x / 7.24x** at `>= 1000`, against a raw gap of 3.87x. What the fit does establish is that **the exponents themselves differ** and no pooled `b` absorbs that: `b_1D = 0.638`, `b_2D = 0.979`, difference **0.340 [0.155, 0.491]** (`|R_L| >= 200`; 0.273 [-0.090, 0.530] at `>= 1000`, where n is small). Those reproduce the published `0.689+-0.045` / `0.965+-0.041` on an independently selected subsample.
+**Fourth refuted 2026-11-05 (`scripts/rhm_xstar_scaling.py`), and this one was measured, not argued.** Since `x* = P*/|R_L| = |R_L|^(b-1)`, `b<1` *is* "x* falls as |R_L| grows" -- so the gap, the 7.6x spread across `(v,m)`, and the depth effect could all be one fact: the two populations sitting at different `|R_L|`. Fitting `log P* = b log|R_L| + c + d*1[2D]` across both dimensions and depths, with each cell's binomial bootstrap carried through, the offset **does not collapse -- it grows**, because 1D cells sit at smaller `|R_L|` and a common `b` over-corrects: `d` = **5.18x [3.44, 8.31] (A) / 5.80x (B)** on cells with `|R_L| >= 200`, **6.90x** at `>= 1000`, against a raw gap of 3.87x -- 134-178% of it. What the fit does establish is that **the exponents themselves differ** and no pooled `b` absorbs that: `b_1D = 0.638`, `b_2D = 0.988`, difference **0.350 [0.149, 0.503]** (`|R_L| >= 200`). Those reproduce the published `0.689+-0.045` / `0.965+-0.041` on an independently selected subsample. (Numbers refreshed 2026-11-05 after 51244750 widened the 2D L=3 side to 9 cells at v=2 and 7 at v=3; the pre-refresh reading was 4.83x / 5.29x with `b_2D = 0.979` on 3 seeds a side, same conclusion.)
 The `|R_L|` floor is load bearing: without it `b_1D` reads **0.510**, because the absolute `P >= 10` floor needed to cut the 2D copying regime censors exactly the 1D cells whose peak lies below it, and that censoring is `|R_L|`-dependent. Restricted to cells where the floor sits far below the peak, the answer is stable between `>= 200` and `>= 1000`.
 
 ## C. hshunt's patch-size criterion: the length scale is everything, the floors are nothing
@@ -93,17 +93,45 @@ excuse for the null.
 ## E. Pooling costs the sampler, not the support, and not via phase count
 `gram_phase/gram_pooled = pool_cost x (eff ratio)`, `pool_cost` exact from enumeration (`rhm_straddle.py:165`). **50 cells: 3.51x = 1.06x (support) x 3.21x (sampler)**; the pooled sampler reaches 0.28 of its own ceiling, per-phase 0.89. The registered prediction that the ratio grows with phases mixed is **refuted**: s=2 (4 phases) 4.04x over 86 cells, s=3 (9 phases) 3.20x over 14.
 
+### E2. "...depending on the synonym rules" -- hshunt's clause, answered 2026-11-05
+`scripts/rhm_straddle_synonyms.py`, no new job: the 75 exact enumerations already on disk
+(`straddle_v{2,3}.json`, `L=2 s=2`, `m=2..6`, `k in {3,5}`, 5 rule seeds each) had never been read
+along the `m` axis. Readout is scale-free and exact,
+> `closure = log(lv_blocks / lv_pooled) / log(lv_blocks / |R_L|)`
+
+-- the fraction of the independent-blocks coupon picture's log-slack that the real LS machine's
+straddling windows actually remove. 0 = straddling buys nothing; 1 = the machine's locally-valid
+set is the grammar itself. **Registered before looking:** closure falls with `m`, on both the
+pooled and the phase-aware machine, CI excluding 0 in both `(v,k)` families. **Held 2/2 on both
+machines** (slopes of `logit(closure)` on `log m`: v=2 **-8.79 [-12.29, -5.69]**, v=3 **-3.51
+[-4.33, -2.68]**; aligned machine -8.60 / -4.77). Control passed exactly: at `k >= side` the
+window covers the whole grid, and `lv_pooled == |R_L|` with closure `1.000` in **25/25** cells.
+
+| closure | m=2 | m=3 | m=4 | m=5 | m=6 |
+|---|---|---|---|---|---|
+| v=2, k=3 | **0.806** | 0.287 | 0.198 | 0.023 | **0.000** |
+| v=3, k=3 | **0.921** | 0.755 | 0.620 | 0.477 | 0.322 |
+
+> **hshunt's clause is confirmed with the sign he suggested, but his "small signal" undersells it
+> at the bottom of the ladder: at `m=2` straddling removes 81-92% of the coupon slack, and at
+> `v=2, m=6` it removes exactly none (`ls_gain = 1.000`, the LS machine's locally-valid set *is*
+> the independent-blocks set).** So the straddling consistency check is not a fixed property of
+> the LS machine -- it is strong when synonyms are few and switches off entirely when they are
+> many, faster at small `v`.
+Why this matters for section A: the headline population is concentrated at small `m`, i.e. exactly
+where the check is near-maximal. Whether that is what sets `x*` is the open test below.
+
 ## Open problems
 - ~~The 1D/2D offset has no mechanism after three refutations. No fourth without a measurement.~~
   **Fourth measured and refuted 2026-11-05 (`scripts/rhm_xstar_scaling.py`), offset still unexplained.**
   The candidate was that there is no dimension effect at all, only a scale effect: `x* = |R_L|^(b-1)`,
   so two populations at different `|R_L|` would show an offset without one existing. Fitting
   `log P* = b log|R_L| + c + d*1[2D]` over both dimensions and both depths, the offset **grows
-  instead of collapsing** (`d` = 4.83x A / 5.29x B at `|R_L| >= 200`, 6.65x / 7.24x at `>= 1000`,
+  instead of collapsing** (`d` = 5.18x A / 5.80x B at `|R_L| >= 200`, 6.90x at `>= 1000`,
   vs a raw gap of 3.87x), because 1D sits at smaller `|R_L|` and a pooled `b` over-corrects it.
-  The positive finding is that **the exponents differ**: `b_1D = 0.638` vs `b_2D = 0.979`,
-  difference **0.340 [0.155, 0.491]** -- matching the published `0.689+-0.045` / `0.965+-0.041` on
-  an independently chosen subsample. In 2D `x* = |R_L|^-0.02..-0.06` is flat across five decades,
+  The positive finding is that **the exponents differ**: `b_1D = 0.638` vs `b_2D = 0.988`,
+  difference **0.350 [0.149, 0.503]** -- matching the published `0.689+-0.045` / `0.965+-0.041` on
+  an independently chosen subsample. In 2D `x* = |R_L|^-0.01..-0.04` is flat across five decades,
   which is what makes `P* = 0.21 |R_L|` a law there and not in 1D (`|R_L|^-0.36`). So mechanism
   four is gone and the offset is sharper, not softer: it is now a difference in *exponent*, not
   only in prefactor.
