@@ -278,3 +278,8 @@ config/local.yml
 logs/
 **.out
 **.err 
+
+# Local render scratch (deck PNG proofs, ad-hoc sweep dumps)
+tmp_audit.pdf
+tmp_audit_png/
+copyrel_sens.txt

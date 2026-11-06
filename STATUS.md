@@ -9,7 +9,7 @@ layer-2 posterior (LOG.md, `mls_entropy_barrier_results.ipynb`).
 `P` = training samples before the LS machine emits output **both novel and fully grammatical**.
 > **`P* = exp(Theta(n))`, `n` = sites. At the U=1 window in 2D, `P* = 0.21 |R_L|`.**
 Measured, not derived; the `C(k) = f0^U` ceiling stays retracted. 30 bracketed 2D peaks collapse to median 0.197 while `|R_L|` spans 49 152x; in 1D `ln P*` grows 0.374/site over n=4..16 but `P* = Theta(|R_L|)` fails (`b=0.689+-0.045`). Root needs `k >= U1 = 2s^(L-1)-1`.
-**Estimator-robust (2026-11-05):** swapping the 3-point peak fit for an inverse-variance fit over the whole top of each curve moves the 2D exponent to `b=0.927+-0.033` and the median to 0.177, overlapping CIs -- the scatter it removes was all estimator noise (Open problems). **Subsample-robust too:** refitting on cells with `|R_L| >= 200` only -- a cut chosen for a different purpose, to keep the `P>=10` floor from censoring 1D -- gives `b_2D = 0.979` (0.939 at `>= 1000`), i.e. `x* = |R_L|^-0.02..-0.06`, flat to within 1.4x across **five decades** of `|R_L|`. That flatness is what makes `0.21 |R_L|` a law in 2D; the same fit in 1D gives `|R_L|^-0.36`, which is why it is not one there. **Depth-robust in 2D, by two routes that agree (2026-11-05):** paired within `(v, m=2)`, `x*(L=2)/x*(L=3)` = 1.58x [0.65, 2.76] (A) / 1.92x [0.94, 2.88] (B) at v=2 and 0.77x / 0.64x at v=3 -- both covering 1 -- which is also what `b_2D` predicts over the same 5e4-fold jump in `|R_L|`. 1D, by contrast, loses **2.5x per single depth step**. The earlier 2.8x 2D reading was an absolute `P >= 10` floor censoring the three smallest grammars; see Open problems. Tightens further when 51244750 lands.
+**Estimator-robust (2026-11-05):** swapping the 3-point peak fit for an inverse-variance fit over the whole top of each curve moves the 2D exponent to `b=0.927+-0.033` and the median to 0.177, overlapping CIs -- the scatter it removes was all estimator noise (Open problems). **Subsample-robust too:** refitting on cells with `|R_L| >= 200` only -- a cut chosen for a different purpose, to keep the `P>=10` floor from censoring 1D -- gives `b_2D = 0.988` on 39 cells (0.963 at `>= 1000`), i.e. `x* = |R_L|^-0.01..-0.04`, flat to within 1.1-1.5x across **five decades** of `|R_L|`. That flatness is what makes `0.21 |R_L|` a law in 2D; the same fit in 1D gives `|R_L|^-0.36`, which is why it is not one there. **Depth-robust in 2D, and as of 51244750 this is a demonstration rather than a failure to resolve one (2026-11-05):** paired within `(v, m=2)` with the L=3 side now at **9 cells at v=2 and 7 at v=3**, `x*(L=2)/x*(L=3)` = 1.25x [0.60, 2.04] (A) / 1.53x [0.73, 2.43] (B) at v=2 and 0.81x / 0.68x at v=3. All four cover 1, and -- the test that actually decides it -- **a 1D-sized step (2.52x A / 2.59x B, matched to one depth level) sits outside all four intervals**. "Covers 1" alone would prove nothing at any seed count; excluding the 1D size is the claim. It is also what `b_2D` predicts over the same 5e4-fold jump in `|R_L|` (1.14x). 1D, by contrast, loses **2.5x per single depth step**. The earlier 2.8x 2D reading was an absolute `P >= 10` floor censoring the three smallest grammars; under that floor the artifact persists on the widened data (2.18x / 2.48x, excluding 1), which is the cleanest demonstration that the floor, not the depth, was producing it. The relative cut's verdict is flat in its own free parameter: over `copy_rel` 0.25 -> 0.8, v=2 spans 1.21-1.76x and v=3 0.53-1.14x.
 
 ## B. Open question: why x* = P*/|R_L| differs by dimension
 **Scope label added 2026-11-05.** This section used to read "n=16: 1D 0.083, 2D 0.159, 1.92x apart" with no statement of *which* peak population those came from, and there are three in the repo. All agree on the direction; the gap's size depends on the population, so the label matters:
@@ -293,20 +293,32 @@ excuse for the null.
    with the estimator term in the log-variance split; section 4's 1.97x is the spread across
    all 30 cells and also contains the real movement of x* with `(v,m)`. The deck's bar chart
    plots the first and quotes the second as a separate line.
-10. **Queued: 51256604** (`scripts/rhm_audit_refresh.sbatch`, CPU, 1 h cap,
-   `--dependency=afterok:51244750`). Re-runs `rhm_copy_regime.py`, both depth cuts, the
-   `copy_rel` sensitivity sweep and `rhm_xstar_scaling.py` at `--min_RL 200` and `1000`,
-   then re-renders the deck -- so no one polls the scheduler for four hours. It deliberately
-   does **not** upload.
-   **New, and it is the answer to "you swapped one arbitrary cut for another":** the relative
-   cut's verdict is flat in its own free parameter. Over `copy_rel` 0.25 -> 0.8, v=2 reads
-   1.37x..2.06x and v=3 0.51x..1.09x, every interval covering 1, and nothing anywhere near the
-   2.8x the absolute floor produced. (Measured on partial output, 7 of 10 v=2 seeds landed;
-   51256604 redoes it on the full set and the deck quotes whatever that says.)
-   **Then, by hand:** read the refreshed numbers, update section A and the deck's
-   depth/scaling pages if they moved, `git add -f` the new `results/.../*.json|txt`, and
-   `~/.local/bin/claude-results-upload.sh convolutional_diffusion
-   notebooks/2026-11-05_rhm_audit_slides.pdf "<what>" "<result>"` before 12:00 PT Fri 11/6.
+10. **Done. 51244750 COMPLETED (2:57 / 4:37, exit 0) and 51256604 COMPLETED (1:19, exit 0).**
+   The widened L=3 side moves `b_2D` 0.979 -> **0.988** on 39 cells and turns the depth test
+   from inconclusive into a demonstration (section A). Mechanism four is refuted harder: the
+   dimension offset is now **5.18x (A) / 5.80x (B)** at `|R_L| >= 200` and **6.90x** at
+   `>= 1000`, i.e. 134-178% of the 3.87x raw gap. `b_1D` without the floor still reads
+   **0.510**, so that caveat is unchanged. Deck re-rendered, numbers now read from the JSON
+   rather than typed in, and re-uploaded.
+   **Two scripts were saying stale things and were fixed, not just re-run:**
+   `rhm_depth2d_analysis.py`'s "reading" hard-coded "the L=3 side at 3 seeds" and concluded
+   underpowered no matter what the data said; it now prints the actual cell counts and tests
+   the only question that decides the matter -- whether a 1D-sized step is still inside the
+   interval -- against the median read from `depth1d_noise_1step.json`. The deck's depth and
+   scaling pages had the same disease (`1.58x`, `6.65x`, `^-0.02` typed as literals) and now
+   interpolate from `fits`/`verdict`.
+   **And it is the answer to "you swapped one arbitrary cut for another":** the relative
+   cut's verdict is flat in its own free parameter. On the full refreshed set, over
+   `copy_rel` 0.25 -> 0.8 and both estimators, v=2 reads **1.21x..1.76x** and v=3
+   **0.53x..1.14x** -- nothing anywhere near the 2.8x the absolute floor produced, and nothing
+   in the 1D direction. Nine of the ten (estimator, v, copy_rel) intervals cover 1; the single
+   exception, B at v=3 and `copy_rel` 0.25, is [0.27, 0.99], i.e. excludes 1 the *opposite*
+   way, which is not a depth effect of the 1D kind. The deck quotes the 0.25-0.8 range on
+   page 6 rather than the single 0.5 value.
+   **Done by hand after the job:** section A and the deck's depth/scaling pages updated to the
+   refreshed numbers, `results/rhm_sampling/2026-11-05/*.json|txt` force-added (the directory
+   is gitignored), deck re-uploaded to OneDrive under the same two strings so it overwrites
+   rather than duplicates.
 
 ## Discipline notes
 - Analysis runs in `srun -p sganguli -t 10 -c 2 --mem=4G`, never a login node; there `ml devel math

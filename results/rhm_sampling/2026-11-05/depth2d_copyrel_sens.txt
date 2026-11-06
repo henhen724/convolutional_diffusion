@@ -1,0 +1,50 @@
+######## copy_rel 0.25
+--- paired depth test: x*(L=2) / x*(L=3) at fixed (v, m=2) ---
+registered 2: if 2D behaves like 1D, x*(L=3) < x*(L=2), i.e. ratio > 1
+est    v L=2                    L=3                    ratio L2/L3 [95% CI]
+A      2 0.1901 (8)             0.1440 (9)             1.26x  [0.59, 2.16]   covers 1
+A      3 0.1509 (7)             0.2248 (7)             0.66x  [0.31, 1.42]   covers 1
+B      2 0.1935 (8)             0.1309 (9)             1.36x  [0.76, 2.15]   covers 1
+B      3 0.1031 (7)             0.2593 (7)             0.53x  [0.27, 0.99]   <- excludes 1
+
+--- reading ---
+######## copy_rel 0.35
+--- paired depth test: x*(L=2) / x*(L=3) at fixed (v, m=2) ---
+registered 2: if 2D behaves like 1D, x*(L=3) < x*(L=2), i.e. ratio > 1
+est    v L=2                    L=3                    ratio L2/L3 [95% CI]
+A      2 0.1901 (8)             0.1440 (9)             1.21x  [0.59, 2.10]   covers 1
+A      3 0.1509 (7)             0.2248 (7)             0.67x  [0.31, 1.27]   covers 1
+B      2 0.1935 (8)             0.1309 (9)             1.36x  [0.73, 2.21]   covers 1
+B      3 0.1031 (7)             0.2593 (7)             0.55x  [0.27, 1.02]   covers 1
+
+--- reading ---
+######## copy_rel 0.5
+--- paired depth test: x*(L=2) / x*(L=3) at fixed (v, m=2) ---
+registered 2: if 2D behaves like 1D, x*(L=3) < x*(L=2), i.e. ratio > 1
+est    v L=2                    L=3                    ratio L2/L3 [95% CI]
+A      2 0.1901 (8)             0.1440 (9)             1.25x  [0.60, 2.04]   covers 1
+A      3 0.1608 (5)             0.2248 (7)             0.81x  [0.54, 1.90]   covers 1
+B      2 0.2344 (8)             0.1309 (9)             1.53x  [0.73, 2.43]   covers 1
+B      3 0.1667 (5)             0.2593 (7)             0.68x  [0.27, 1.28]   covers 1
+
+--- reading ---
+######## copy_rel 0.65
+--- paired depth test: x*(L=2) / x*(L=3) at fixed (v, m=2) ---
+registered 2: if 2D behaves like 1D, x*(L=3) < x*(L=2), i.e. ratio > 1
+est    v L=2                    L=3                    ratio L2/L3 [95% CI]
+A      2 0.1901 (8)             0.1440 (9)             1.41x  [0.68, 2.09]   covers 1
+A      3 0.2549 (5)             0.2248 (7)             1.14x  [0.62, 2.00]   covers 1
+B      2 0.2671 (8)             0.1309 (9)             1.76x  [0.81, 2.60]   covers 1
+B      3 0.2604 (5)             0.2593 (7)             0.82x  [0.44, 1.53]   covers 1
+
+--- reading ---
+######## copy_rel 0.8
+--- paired depth test: x*(L=2) / x*(L=3) at fixed (v, m=2) ---
+registered 2: if 2D behaves like 1D, x*(L=3) < x*(L=2), i.e. ratio > 1
+est    v L=2                    L=3                    ratio L2/L3 [95% CI]
+A      2 0.2169 (7)             0.1440 (9)             1.66x  [0.66, 2.55]   covers 1
+A      3 0.2905 (6)             0.2248 (7)             1.08x  [0.62, 2.05]   covers 1
+B      2 0.1627 (7)             0.1309 (9)             1.56x  [0.85, 2.54]   covers 1
+B      3 0.2969 (6)             0.2593 (7)             0.93x  [0.57, 1.57]   covers 1
+
+--- reading ---

@@ -1,0 +1,33 @@
+srun: job 51281102 queued and waiting for resources
+srun: job 51281102 has been allocated resources
+The following modules were not unloaded:
+  (Use "module --force purge" to unload all):
+
+  1) math   2) devel
+1D cells:  60   |R_L| 12 .. 9.04e+04   depths [2, 3, 4]
+2D cells:  60   |R_L| 38 .. 6.29e+06   depths [2, 3]
+
+===== estimator A   (120 cells) =====
+  1D only   b = 0.510    (x* = |R_L|^-0.490, so x* falls with |R_L|)
+  2D only   b = 0.960    (x* = |R_L|^-0.040, so x* falls with |R_L|)
+  pooled, common b:  b = 0.856  [0.789, 0.896]
+                     2D offset d = 1.298  [0.969, 1.651]  -> 3.66x in x*
+                     raw 1D/2D gap in median x* is 3.87x (= d of 1.353)
+  separate b:        b_1D = 0.510   b_2D = 0.960   difference 0.450  [0.325, 0.546]
+
+===== estimator B   (120 cells) =====
+  1D only   b = 0.473    (x* = |R_L|^-0.527, so x* falls with |R_L|)
+  2D only   b = 0.958    (x* = |R_L|^-0.042, so x* falls with |R_L|)
+  pooled, common b:  b = 0.846  [0.773, 0.891]
+                     2D offset d = 1.400  [1.087, 1.726]  -> 4.05x in x*
+                     raw 1D/2D gap in median x* is 3.87x (= d of 1.353)
+  separate b:        b_1D = 0.473   b_2D = 0.958   difference 0.485  [0.359, 0.591]
+
+--- reading ---
+  Raw 1D/2D gap 3.87x. After allowing x* to depend on |R_L| with a
+  single exponent, the residual dimension offset is 3.66x (A) and
+  4.05x (B) -- 95% and 105% of the raw gap.
+  The offset survives, so dimension is a real effect on top of the
+  scale dependence and section B's open question stands.
+  Separate exponents still differ (b_1D 0.510 vs b_2D 0.960 under A),
+  which is the part a single pooled b cannot absorb.

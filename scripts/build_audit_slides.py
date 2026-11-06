@@ -379,8 +379,12 @@ def copyrel_sensitivity(D):
 
 def page_depth(pdf, D):
     one = json.load(open(D / 'depth1d_noise_1step.json'))
-    cr = json.load(open(D / 'depth2d_copyrel.json'))['verdict']
-    fl = json.load(open(D / 'depth2d_pmin10.json'))['verdict']
+    crd = json.load(open(D / 'depth2d_copyrel.json'))
+    cr, fl = crd['verdict'], json.load(open(D / 'depth2d_pmin10.json'))['verdict']
+
+    def n_L3(v):
+        return sum(1 for c in crd['cells'] if c['L'] == 3 and c['v'] == v
+                   and c.get('x_A') and np.isfinite(c['x_A']))
 
     def med1d(w):
         rs = [c[w]['ratio'] for c in one['combos']
@@ -440,17 +444,28 @@ def page_depth(pdf, D):
         '  dropped are the three smallest grammars\n'
         '  (P* = 3.9, 4.7, 8.7).\n\n'
         'With the copying-regime cut instead\n'
-        '  all 8 cells survive, and the ratio falls from\n'
-        '  2.82x [1.49, 4.05] to 1.58x [0.65, 2.76] (A),\n'
-        '  3.13x -> 1.92x [0.94, 2.88] (B).  v=3 runs the\n'
-        '  other way (0.77x / 0.64x).  The v=4 control --\n'
+        '  all 8 cells survive, and v=2 falls from\n'
+        '  %.2fx [%.2f, %.2f] to %.2fx [%.2f, %.2f] (A),\n'
+        '  %.2fx -> %.2fx [%.2f, %.2f] (B).  v=3 runs the\n'
+        '  other way (%.2fx / %.2fx).  The v=4 control --\n'
         '  the one cell measured under both old and new\n'
         '  settings -- passes either way (1.17x / 0.87x).\n\n'
+        'And it is now powered, not just inconclusive\n'
+        '  51244750 took the L=3 side to %d seeds at v=2\n'
+        '  and %d at v=3.  A 1D-sized step (2.52x / 2.59x)\n'
+        '  sits OUTSIDE all four intervals, so this is a\n'
+        '  demonstration that 2D does not do what 1D does,\n'
+        '  not a failure to resolve one.\n\n'
         'And it is what the exponent predicts\n'
-        '  b_2D = 0.945..0.979 over a 5e4-fold jump in\n'
-        '  |R_L| gives (5e4)^(1-b) = 1.25-1.8x.  Two\n'
-        '  routes, one of them censoring-free, agree.')
-    fig.text(0.645, 0.825, txt, fontsize=10, va='top', family='monospace',
+        '  b_2D = 0.988 over a 5e4-fold jump in |R_L|\n'
+        '  gives (5e4)^(1-b) = 1.14x.  Two routes, one of\n'
+        '  them censoring-free, agree.'
+        % (fl['A_v2'][0], fl['A_v2'][1], fl['A_v2'][2],
+           cr['A_v2'][0], cr['A_v2'][1], cr['A_v2'][2],
+           fl['B_v2'][0],
+           cr['B_v2'][0], cr['B_v2'][1], cr['B_v2'][2],
+           cr['A_v3'][0], cr['B_v3'][0], n_L3(2), n_L3(3)))
+    fig.text(0.645, 0.845, txt, fontsize=9.2, va='top', family='monospace',
              linespacing=1.42)
     fig.text(0.025, 0.825,
              'Pooling cannot answer this.\n'
@@ -479,6 +494,9 @@ def page_depth(pdf, D):
 def page_scaling(pdf, D):
     d = json.load(open(D / 'xstar_scaling_mr200.json'))
     cells, fits = d['cells'], d['fits']
+    f1k = D / 'xstar_scaling_mr1000.json'
+    d_1k = (np.exp(json.load(open(f1k))['fits']['A']['d'])
+            if f1k.exists() else 6.65)
     fig = plt.figure(figsize=PAGE)
     fig.suptitle('Attack 2: is the 1D/2D gap a |R_L| scale effect?   '
                  'No -- correcting for it makes the gap bigger',
@@ -519,24 +537,28 @@ def page_scaling(pdf, D):
         '  cell\'s binomial bootstrap through.\n\n'
         'Refuted, and in the awkward direction\n'
         '  |R_L| >= 200    d = %.2fx in x*  [%.2f, %.2f]\n'
-        '  |R_L| >= 1000   d = 6.65x\n'
+        '  |R_L| >= 1000   d = %.2fx\n'
         '  raw gap         3.87x\n'
         '  a common b over-corrects the small 1D cells,\n'
-        '  so the offset GROWS to 125-187%% of the gap.\n\n'
+        '  so the offset GROWS to %d-%d%% of the gap.\n\n'
         'What it does establish\n'
         '  b_1D = %.3f  vs  b_2D = %.3f\n'
         '  difference %.3f  [%.3f, %.3f]\n'
-        '  In 2D x* = |R_L|^-0.02: flat to 1.4x over five\n'
+        '  In 2D x* = |R_L|^%+.3f: flat to %.1fx over five\n'
         '  decades -- THAT is what makes 0.21 |R_L| a law\n'
-        '  in 2D.  In 1D the same fit gives |R_L|^-0.36.\n\n'
+        '  in 2D.  In 1D the same fit gives |R_L|^%+.2f.\n\n'
         'Caveat that cost a day\n'
         '  without the |R_L| >= 200 cut b_1D reads 0.510:\n'
         '  the P >= 10 floor censors exactly the small-\n'
         '  |R_L| 1D cells, and that censoring is itself\n'
         '  |R_L|-dependent.  Same defect as page 5.'
         % (np.exp(f['d']), np.exp(f['d_ci'][0]), np.exp(f['d_ci'][1]),
+           d_1k,
+           round(100 * np.exp(f['d']) / 3.87), round(100 * d_1k / 3.87),
            f['b_1d'], f['b_2d'],
-           f['b_2d'] - f['b_1d'], f['db_ci'][0], f['db_ci'][1]))
+           f['b_2d'] - f['b_1d'], f['db_ci'][0], f['db_ci'][1],
+           f['b_2d'] - 1.0, 10 ** (5 * abs(f['b_2d'] - 1.0)),
+           f['b_1d'] - 1.0))
     fig.text(0.545, 0.845, txt, fontsize=11, va='top', family='monospace',
              linespacing=1.4)
     pdf.savefig(fig); plt.close(fig)

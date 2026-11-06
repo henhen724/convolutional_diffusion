@@ -1,0 +1,29 @@
+1D cells:  41   |R_L| 1.43e+03 .. 9.04e+04   depths [3, 4]
+2D cells:  31   |R_L| 1.38e+03 .. 6.29e+06   depths [2, 3]
+
+===== estimator A   (72 cells) =====
+  1D only   b = 0.666    (x* = |R_L|^-0.334, so x* falls with |R_L|)
+  2D only   b = 0.963    (x* = |R_L|^-0.037, so x* falls with |R_L|)
+  pooled, common b:  b = 0.918  [0.829, 0.985]
+                     2D offset d = 1.932  [1.425, 2.438]  -> 6.90x in x*
+                     raw 1D/2D gap in median x* is 3.87x (= d of 1.353)
+  separate b:        b_1D = 0.666   b_2D = 0.963   difference 0.297  [-0.012, 0.546]
+
+===== estimator B   (72 cells) =====
+  1D only   b = 0.622    (x* = |R_L|^-0.378, so x* falls with |R_L|)
+  2D only   b = 0.976    (x* = |R_L|^-0.024, so x* falls with |R_L|)
+  pooled, common b:  b = 0.922  [0.830, 0.999]
+                     2D offset d = 2.032  [1.471, 2.566]  -> 7.63x in x*
+                     raw 1D/2D gap in median x* is 3.87x (= d of 1.353)
+  separate b:        b_1D = 0.622   b_2D = 0.976   difference 0.354  [0.027, 0.616]
+
+--- reading ---
+  Raw 1D/2D gap 3.87x. After allowing x* to depend on |R_L| with a
+  single exponent, the residual dimension offset is 6.90x (A) and
+  7.63x (B) -- 178% and 197% of the raw gap.
+  The offset survives, so dimension is a real effect on top of the
+  scale dependence and section B's open question stands.
+  Separate exponents still differ (b_1D 0.666 vs b_2D 0.963 under A),
+  which is the part a single pooled b cannot absorb.
+
+wrote /scratch/users/hshunt/convolutional_diffusion/results/rhm_sampling/2026-11-05/xstar_scaling_mr1000.json

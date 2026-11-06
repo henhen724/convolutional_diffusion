@@ -309,7 +309,7 @@ def main():
     print('registered 2: if 2D behaves like 1D, x*(L=3) < x*(L=2), i.e. ratio > 1')
     print('%-4s %3s %-22s %-22s %s'
           % ('est', 'v', 'L=2', 'L=3', 'ratio L2/L3 [95% CI]'))
-    verdict = {}
+    verdict, counts = {}, {}
     for w in ('A', 'B'):
         for v in (2, 3):
             n2 = group('L2new', v, 2, w) or group('L2pub', v, 2, w)
@@ -318,6 +318,7 @@ def main():
             p3, c3 = point('L3pub', v, 3, w)
             r, lo, hi = med_ratio_ci(n2, group('L3pub', v, 3, w), a.boot, rng)
             verdict[(w, v)] = (r, lo, hi)
+            counts[(w, v)] = (c2, c3)
             print('%-4s %3d %-22s %-22s %.2fx  [%.2f, %.2f]%s'
                   % (w, v, '%.4f (%d)' % (p2, c2), '%.4f (%d)' % (p3, c3),
                      r, lo, hi,
@@ -326,15 +327,39 @@ def main():
 
     print()
     print('--- reading ---')
+    # "Does the interval cover 1" is the wrong question on its own: with few
+    # seeds nothing will ever exclude 1, and that is not evidence of stability.
+    # The question that decides it is whether a 1D-SIZED effect is still
+    # allowed, so the bar is the matched one-step 1D median, read from
+    # depth1d_noise_1step.json when it is there.
+    one_step = {'A': 2.52, 'B': 2.59}
+    f1d = ROOT / a.new / 'depth1d_noise_1step.json'
+    if f1d.exists():
+        combos = json.load(open(f1d))['combos']
+        for w in ('A', 'B'):
+            rs = [c[w]['ratio'] for c in combos
+                  if np.isfinite(c[w]['ratio']) and c[w]['ratio'] > 0]
+            if rs:
+                one_step[w] = float(np.median(rs))
+
     sig = [k for k, (r, lo, hi) in verdict.items()
            if np.isfinite(lo) and (lo > 1 or hi < 1)]
-    if not sig:
-        print('No depth effect resolvable at this power.  With the L=3 side at')
-        print('3 seeds and n_gen=1024 (per-cell spread up to 3.5x), only an')
-        print('effect of roughly the 1D size (~2.8x) would clear these bars, so')
-        print('this is NOT a demonstration that x* is depth-stable in 2D.')
+    up = [k for k in sig if verdict[k][0] > 1]
+    excl = [k for k, (r, lo, hi) in verdict.items()
+            if np.isfinite(hi) and hi < one_step[k[0]]]
+    print('L=3 cells per (est, v): %s'
+          % ',  '.join('%s v%d: %d' % (w, v, counts[(w, v)][1])
+                       for (w, v) in sorted(counts)))
+    print('A 1D-sized step (%.2fx A / %.2fx B) is excluded in %d of 4 pairs.'
+          % (one_step['A'], one_step['B'], len(excl)))
+    if len(excl) == 4 and not up:
+        print('So x* does NOT fall with depth in 2D the way it does in 1D.')
+        print('This is a demonstration, not a failure to resolve one, and')
+        print('section A stands as written.')
+    elif not sig:
+        print('No depth effect resolvable, and the 1D size is not excluded')
+        print('everywhere either, so this decides nothing on its own.')
     else:
-        up = [k for k in sig if verdict[k][0] > 1]
         print('Resolved in %d of 4 (estimator, v) pairs; %d with x*(L=3) lower,'
               % (len(sig), len(up)))
         print('which is the 1D direction.  If this holds, section A\'s')
